@@ -7,6 +7,10 @@ An MCP (Model Context Protocol) server that reads SSIS packages (`.dtsx`) and co
 
 All generated artifacts follow **Microsoft Recommended patterns** from [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/data-factory/).
 
+> **Product direction:** See the [AI-powered SSIS migration platform plan](docs/AI_MIGRATION_PLATFORM_PLAN.md)
+> for the proposed customer experience, architecture, trust model, reconciliation approach,
+> and delivery roadmap.
+
 ```
 .dtsx file(s)  ──┐
                   │      ┌────────────────────────┐
