@@ -1,0 +1,3 @@
+*.dtsx text eol=lf
+*.params text eol=lf
+catalog.json text eol=lf
