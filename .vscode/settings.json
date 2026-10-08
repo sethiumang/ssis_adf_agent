@@ -1,10 +1,13 @@
 {
-    "chat.mcp.serverSampling": {
-        "ssis_adf_agent/.vscode/mcp.json: ssis-adf-agent": {
-            "allowedModels": [
-                "copilot/claude-opus-4.6",
-                "copilotcli/claude-sonnet-4.6"
-            ]
-        }
+  "chat.mcp.serverSampling": {
+    "ssis_adf_agent/.vscode/mcp.json: ssis-adf-agent": {
+      "allowedModels": [
+        "copilot/claude-opus-4.6",
+        "copilotcli/claude-sonnet-4.6"
+      ]
     }
+  },
+  "chat.promptFilesLocations": {
+    ".vscode": true
+  }
 }

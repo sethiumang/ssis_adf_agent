@@ -123,7 +123,7 @@ All 10 packages pass corpus integrity, and regeneration is byte-identical. Runni
 | P8 | Execute Process Task is reported as UNKNOWN. | It is not routed to a Function or Batch pattern. | 06 |
 | P9 | User variable data types are lost; everything becomes String. | Wrong ADF variable types, and broken numeric/date comparisons. | all packages |
 | P10 | No datasets are generated for any data-flow source or sink. | Copy and Data Flow activities can't run. | all packages |
-| P11 | `mcp_server` fails to import with `mcp` 2.x (`Server.list_tools` was removed), because `pyproject.toml` pins only `mcp>=1.0.0`. | The MCP server breaks on a fresh install. | fresh `pip install -e .` (mcp 2.2.0) |
+| P11 | ~~`mcp_server` fails to import with `mcp` 2.x (`Server.list_tools` was removed).~~ **Fixed:** `pyproject.toml` now pins `mcp>=1.0.0,<2`, and `scripts/verify_install.py` checks it. | — | — |
 | P12 | Planted semantic traps (unconnected outputs, `MAX(RateDate)`, Fuzzy Lookup, byte-exact NACHA) are not flagged by the gap analyzer. | These need reconciliation and evidence gates, not just conversion. | 03, 08, 09, 06 |
 
 These findings are what the [AI migration platform plan](../../docs/AI_MIGRATION_PLATFORM_PLAN.md) relies on for its trusted converter and reconciliation gates.

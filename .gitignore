@@ -7,3 +7,9 @@ build/
 .env
 .venv/
 *.egg
+
+# Customer migration workspaces and generated output - never commit customer packages
+work/
+adf_output/
+.env.*
+!.env.example

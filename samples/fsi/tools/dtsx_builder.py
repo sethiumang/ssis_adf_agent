@@ -19,8 +19,8 @@ import re
 import uuid
 import xml.etree.ElementTree as ET
 from collections import Counter
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Iterable, Sequence
 
 DTS_NS = "www.microsoft.com/SqlServer/Dts"
 SQLTASK_NS = "www.microsoft.com/sqlserver/dts/tasks/sqltask"
@@ -174,9 +174,9 @@ class Col:
 
 @dataclass
 class Output:
-    comp: "Component"
+    comp: Component
     name: str
-    sync_input: "Input | None" = None
+    sync_input: Input | None = None
     is_error: bool = False
     exclusion_group: int | None = None
     is_sorted: bool = False
@@ -214,7 +214,7 @@ class Output:
 
 @dataclass
 class Input:
-    comp: "Component"
+    comp: Component
     name: str
     upstream: Output | None = None
     has_side_effects: bool = False
@@ -248,7 +248,7 @@ class Input:
 
 @dataclass
 class Component:
-    flow: "DataFlow"
+    flow: DataFlow
     name: str
     class_id: str
     description: str
@@ -352,7 +352,7 @@ _COLUMN_REF = re.compile(r"(?<![@\w])\[([^\]\[]+)\]")
 class DataFlow:
     """Builder for a ``Microsoft.Pipeline`` (Data Flow Task) body."""
 
-    def __init__(self, ref: str, pkg: "Package"):
+    def __init__(self, ref: str, pkg: Package):
         self.ref = ref
         self.pkg = pkg
         self.components: list[Component] = []
@@ -727,7 +727,7 @@ def _csproj(name: str) -> str:
 class Executable:
     """An SSIS task or container element in the control flow."""
 
-    def __init__(self, pkg: "Package", ref: str, name: str, creation_name: str, description: str,
+    def __init__(self, pkg: Package, ref: str, name: str, creation_name: str, description: str,
                  is_task: bool = True, attrs: dict[str, str] | None = None):
         self.pkg = pkg
         self.ref = ref
@@ -741,7 +741,7 @@ class Executable:
         self.pipeline: DataFlow | None = None
         self.disabled = False
 
-    def expr(self, prop: str, expression: str) -> "Executable":
+    def expr(self, prop: str, expression: str) -> Executable:
         self.property_expressions.append((prop, expression))
         return self
 
@@ -799,7 +799,7 @@ class _Variable:
 class Container(Executable):
     """Package, Sequence, ForEach, For Loop or event handler scope."""
 
-    def __init__(self, pkg: "Package", ref: str, name: str, creation_name: str, description: str,
+    def __init__(self, pkg: Package, ref: str, name: str, creation_name: str, description: str,
                  attrs: dict[str, str] | None = None):
         super().__init__(pkg, ref, name, creation_name, description, is_task=False, attrs=attrs)
         self.variables: list[_Variable] = []
@@ -907,11 +907,11 @@ class Container(Executable):
         return self._add(exe)
 
     # -- containers ------------------------------------------------------- #
-    def sequence(self, name: str, description: str = "Sequence Container") -> "Container":
+    def sequence(self, name: str, description: str = "Sequence Container") -> Container:
         return self._add(Container(self.pkg, self._child_ref(name), name, "STOCK:SEQUENCE", description))  # type: ignore[return-value]
 
     def for_loop(self, name: str, *, init: str, eval_: str, assign: str,
-                 description: str = "For Loop Container") -> "Container":
+                 description: str = "For Loop Container") -> Container:
         c = Container(self.pkg, self._child_ref(name), name, "STOCK:FORLOOP", description,
                       attrs={"AssignExpression": assign, "EvalExpression": eval_, "InitExpression": init,
                              "MaxConcurrent": "1"})
@@ -919,7 +919,7 @@ class Container(Executable):
 
     def foreach_file(self, name: str, *, folder: str, file_spec: str, mappings: Sequence[str],
                      folder_expression: str | None = None, retrieval: int = 0,
-                     description: str = "Foreach Loop Container") -> "Container":
+                     description: str = "Foreach Loop Container") -> Container:
         c = Container(self.pkg, self._child_ref(name), name, "STOCK:FOREACHLOOP", description)
         enum = ET.Element(d("ForEachEnumerator"), {
             d("refId"): f"{c.ref}\\{{{guid(self.pkg.name, c.ref, 'enum')[1:-1]}}}",
@@ -938,7 +938,7 @@ class Container(Executable):
         return self._add(c)  # type: ignore[return-value]
 
     def foreach_ado(self, name: str, *, source_variable: str, mappings: Sequence[str],
-                    description: str = "Foreach Loop Container") -> "Container":
+                    description: str = "Foreach Loop Container") -> Container:
         c = Container(self.pkg, self._child_ref(name), name, "STOCK:FOREACHLOOP", description)
         enum = ET.Element(d("ForEachEnumerator"), {
             d("refId"): f"{c.ref}\\{{{guid(self.pkg.name, c.ref, 'enum')[1:-1]}}}",
@@ -1030,7 +1030,7 @@ class Container(Executable):
 
 
 class EventHandler(Container):
-    def __init__(self, pkg: "Package", owner_ref: str, event: str):
+    def __init__(self, pkg: Package, owner_ref: str, event: str):
         ref = f"{owner_ref}.EventHandlers[{event}]"
         super().__init__(pkg, ref, event, event, "")
         self.event = event

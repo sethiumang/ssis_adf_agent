@@ -18,8 +18,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import PROJECT_NAME, PROJECT_PARAMS  # noqa: E402
 from dtsx_builder import DTS_NS, project_params_xml  # noqa: E402
-from packages_a import aml_ctr_monitoring, custodian_positions, customer_kyc_scd2, fx_daily_rates, gl_incremental  # noqa: E402
-from packages_b import ach_nacha_outbound, bank_statement_recon, credit_exposure, eod_master, ofac_screening  # noqa: E402
+from packages_a import (  # noqa: E402
+    aml_ctr_monitoring,
+    custodian_positions,
+    customer_kyc_scd2,
+    fx_daily_rates,
+    gl_incremental,
+)
+from packages_b import (  # noqa: E402
+    ach_nacha_outbound,
+    bank_statement_recon,
+    credit_exposure,
+    eod_master,
+    ofac_screening,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_DIR = ROOT / "ssis" / PROJECT_NAME

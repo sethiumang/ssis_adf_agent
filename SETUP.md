@@ -27,7 +27,7 @@ Step-by-step instructions for getting `ssis-adf-agent` running on a new machine.
 ## 2. Clone and Install
 
 ```bash
-git clone https://github.com/chsimons_microsoft/ssis_adf_agent.git
+git clone <this-repo-url> ssis_adf_agent
 cd ssis_adf_agent
 ```
 
@@ -62,8 +62,12 @@ pip install -e ".[dev,llm]"
 ### Verify
 
 ```bash
-ssis-adf-agent --help
+python scripts/verify_install.py
 ```
+
+This starts the MCP server the same way VS Code does, checks that all five tools are registered, and analyzes a sample package. `ssis-adf-agent` itself is the stdio server: if you run it directly, it waits silently for a client.
+
+> **VS Code and virtual environments:** `.vscode/mcp.json` launches `python -m ssis_adf_agent.mcp_server`. Either start VS Code from a terminal where the venv is active (`code .`), or select the venv interpreter. If neither works, change `"command"` in `.vscode/mcp.json` to the venv's Python (`.venv\\Scripts\\python.exe` or `.venv/bin/python`).
 
 ---
 
@@ -173,31 +177,28 @@ C:\adf_output\shared
 
 ## 6. Quick Smoke Test
 
-1. Copy a `.dtsx` file into the `samples/` directory.
-2. Open Copilot Chat in Agent mode.
-3. Run:
+Use the synthetic FSI corpus, so you don't need any customer data:
+
+1. Open Copilot Chat in Agent mode.
+2. Run:
 
 ```
-Scan for SSIS packages at samples/ and list what you find.
+Scan for SSIS packages at samples/fsi/ssis and list what you find.
+```
+
+3. Then:
+
+```
+Analyze samples/fsi/ssis/ContosoBank.EOD/FIN_FX_DailyRates_Load.dtsx.
 ```
 
 4. Then:
 
 ```
-Analyze the SSIS package at samples/MyPackage.dtsx.
+Convert it to work/demo/03_adf/FIN_FX_DailyRates_Load and validate the artifacts.
 ```
 
-5. Then:
-
-```
-Convert samples/MyPackage.dtsx to C:\adf_output\MyPackage.
-```
-
-6. Check the output:
-
-```
-Validate the ADF artifacts at C:\adf_output\MyPackage.
-```
+Next: follow [docs/CUSTOMER_FLOW.md](docs/CUSTOMER_FLOW.md) for the full analyze → refactor → test → reconcile → deploy flow on your own packages.
 
 ---
 
@@ -226,6 +227,7 @@ The project enforces `ruff` with `line-length = 100` and `mypy --strict`.
 | Problem | Solution |
 |---|---|
 | `ssis-adf-agent` command not found | Ensure the venv is activated, or use the full path to the script |
+| `AttributeError: 'Server' object has no attribute 'list_tools'` | `mcp` 2.x is installed. Run `pip install -e .` again; the project pins `mcp<2` |
 | Tools don't appear in Copilot Chat | Reload VS Code; confirm `.vscode/mcp.json` exists and Agent mode is selected |
 | ODBC errors when scanning SQL Server | Install [ODBC Driver 17+](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) and verify with `odbcinst -j` (Linux) or ODBC Data Source Administrator (Windows) |
 | `EncryptAllWithPassword` warnings | The SSIS package has encrypted connection strings. Passwords must be filled in manually in linked service JSON or referenced via Key Vault (`use_key_vault=true`) |

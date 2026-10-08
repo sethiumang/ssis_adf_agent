@@ -14,6 +14,26 @@ All generated artifacts follow **Microsoft Recommended patterns** from [learn.mi
 > **Test corpus:** [`samples/fsi/`](samples/fsi/README.md) contains 10 synthetic financial-services SSIS
 > packages (AML, sanctions, ACH, GL, risk, treasury) plus a validator that probes this engine.
 
+## Start here (customers)
+
+1. **Read the flow.** [docs/CUSTOMER_FLOW.md](docs/CUSTOMER_FLOW.md) covers how you work with the agent, the six phases (discover → assess → convert and refactor → test → reconcile → deploy), the evidence gates, and what is automated today versus done by you.
+2. **Install** (Python 3.11+):
+   ```powershell
+   git clone <this-repo-url> ssis_adf_agent; cd ssis_adf_agent
+   python -m venv .venv; .venv\Scripts\activate      # macOS/Linux: source .venv/bin/activate
+   pip install -e .
+   python scripts/verify_install.py                  # starts the MCP server and analyzes a sample package
+   ```
+3. **Open the folder in VS Code**, start Copilot Chat in **Agent** mode, and try it on the sample corpus:
+   `Analyze every package under samples/fsi/ssis and rank them by migration risk.`
+4. **Point it at your packages.** Keep your work in `work/<migration-name>/` (git-ignored), and follow the prompts `/analyze_packages` → `/convert_package` → `/refactor_gaps` → `/deploy_adf` → `/reconcile_package`.
+
+> ⚠️ **Review generated pipelines before running them.** Known engine limitations include missing
+> activity ordering (`dependsOn`) and missing data flows inside containers. See
+> [Known limitations](docs/CUSTOMER_FLOW.md#known-limitations-read-before-using-output).
+> This is an accelerator provided as-is under the MIT license. You are responsible for reviewing,
+> testing and reconciling everything it generates.
+
 ```
 .dtsx file(s)  ──┐
                   │      ┌────────────────────────┐
@@ -47,6 +67,8 @@ SQL Agent jobs ───┤      │   Optional configs:    │
 
 ## Table of Contents
 
+- [Start here (customers)](#start-here-customers)
+- [Customer flow and readiness gates](docs/CUSTOMER_FLOW.md)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Registering as an MCP Server in VS Code](#registering-as-an-mcp-server-in-vs-code)
@@ -95,7 +117,7 @@ SQL Agent jobs ───┤      │   Optional configs:    │
 Clone the repository and install in editable mode (recommended for development):
 
 ```bash
-git clone https://github.com/chsimons_microsoft/ssis_adf_agent.git
+git clone <this-repo-url> ssis_adf_agent
 cd ssis_adf_agent
 pip install -e .
 ```
@@ -112,11 +134,13 @@ To enable **automatic C# → Python translation** of Script Tasks via Azure Open
 pip install -e ".[llm]"
 ```
 
-Verify the installation:
+Verify the installation. This starts the MCP server over stdio, lists its tools and analyzes a sample package:
 
 ```bash
-ssis-adf-agent --help
+python scripts/verify_install.py
 ```
+
+> `ssis-adf-agent` (the console script) *is* the stdio MCP server. Run on its own, it waits silently for an MCP client; that is expected.
 
 > **Note:** When the package is published to PyPI, you can install it with `pip install ssis-adf-agent` without cloning the repository.
 
@@ -155,24 +179,23 @@ Add the server to your VS Code `settings.json` so GitHub Copilot can discover it
 
 ## Trying It Out — Samples Directory
 
-The `samples/` directory is intended as a convenient drop zone for `.dtsx` files you want to experiment with locally.
+Start with the synthetic [FSI sample corpus](samples/fsi/README.md) (`samples/fsi/ssis/ContosoBank.EOD/`). It needs no customer data.
 
-1. Copy one or more `.dtsx` files into `samples/`:
+For your own packages, use a `work/` folder in the repo root (or a separate repo of your own). `work/` and `adf_output/` are git-ignored, so proprietary packages and generated output cannot be committed by accident.
+
+1. Copy or point at your `.dtsx` files, for example:
 
    ```
-   samples/
-     MyETLPackage.dtsx
-     LoadDimCustomer.dtsx
+   work/my-migration/
+     source/MyETLPackage.dtsx
    ```
 
 2. When using any tool that requires a `package_path` or `path_or_connection`, supply the **absolute path** to the file or directory. For example:
 
-   - **Windows:** `C:\Users\you\ssis_adf_agent\samples\MyETLPackage.dtsx`
-   - **macOS/Linux:** `/home/you/ssis_adf_agent/samples/MyETLPackage.dtsx`
+   - **Windows:** `C:\Users\you\ssis_adf_agent\work\my-migration\source\MyETLPackage.dtsx`
+   - **macOS/Linux:** `/home/you/ssis_adf_agent/work/my-migration/source/MyETLPackage.dtsx`
 
-3. For output, create a directory alongside `samples/` (e.g. `adf_output/`) to keep generated artifacts separate from source packages.
-
-> The `samples/` directory is `.gitignore`-friendly — add your test packages there without worrying about committing proprietary SSIS files.
+3. Write output to `work/my-migration/03_adf/<Package>/`, following the folder layout in [docs/CUSTOMER_FLOW.md](docs/CUSTOMER_FLOW.md#recommended-working-folder).
 
 ---
 
@@ -473,12 +496,14 @@ Convert C:\Projects\LegacyETL\LoadFactSales.dtsx to C:\adf_output\LoadFactSales 
 
 ## Using the Built-in Prompt Files
 
-Three reusable prompt files are included in `.vscode/` and can be invoked directly from Copilot Chat to run the full workflow with guided inputs.
+Five reusable prompt files are included in `.vscode/` (enabled through `chat.promptFilesLocations` in `.vscode/settings.json`). You can invoke them directly from Copilot Chat to run each phase of the [customer flow](docs/CUSTOMER_FLOW.md) with guided inputs.
 
 | Prompt File | Mode | Description |
 |---|---|---|
 | `analyze_packages.prompt.md` | Agent | Scan a source, then analyze every package found and produce a prioritized conversion report |
 | `convert_package.prompt.md` | Agent | Analyze, convert, and validate a single package; produces a Markdown summary with a manual-steps checklist |
+| `refactor_gaps.prompt.md` | Agent | Work through a converted package's gaps (Script Tasks, linked servers, missing `dependsOn`, …) with reviewed edits |
+| `reconcile_package.prompt.md` | Agent | Generate reconciliation SQL (counts, control totals, key/hash diffs) and a data-owner sign-off template |
 | `deploy_adf.prompt.md` | Agent | Validate artifacts and deploy to ADF with optional dry-run |
 
 **To invoke from Copilot Chat:**
