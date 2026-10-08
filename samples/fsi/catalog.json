@@ -1,0 +1,876 @@
+{
+  "project": "ContosoBank.EOD",
+  "description": "Synthetic Contoso Bank end-of-day SSIS project for testing SSIS -> ADF migration tooling. All names, hosts and data are fictional.",
+  "ssis_version": "SQL Server 2019 (PackageFormatVersion 8, project deployment model)",
+  "generator": "samples/fsi/tools/generate_packages.py",
+  "packages": [
+    {
+      "id": "01",
+      "name": "FIN_FX_DailyRates_Load",
+      "file": "ssis/ContosoBank.EOD/FIN_FX_DailyRates_Load.dtsx",
+      "description": "Loads daily noon-buying FX rates (Federal Reserve H.10 style CSV) into ref.FxRate for multi-currency GL revaluation and risk exposure conversion.",
+      "domain": "Finance / Reference data",
+      "scenario": "Daily FX rate file ingestion and upsert",
+      "regulatory_context": "Feeds GL revaluation and BCBS 239 exposure aggregation in a common currency",
+      "schedule": "Daily 12:30 ET after H.10-style noon rates are published",
+      "features": [
+        "Project + package parameters",
+        "Variable expression for dynamic file path",
+        "Flat file connection with ConnectionString expression",
+        "Simple file->table data flow",
+        "Execute SQL MERGE with SingleRow result binding",
+        "THROW-based data quality assertion",
+        "Batch audit start/end procs with OUTPUT parameter"
+      ],
+      "expected_adf": [
+        "Copy activity (DelimitedText -> Azure SQL)",
+        "Script or Stored Procedure activity for MERGE",
+        "Lookup/Script activity for assertion",
+        "Pipeline parameter BusinessDate"
+      ],
+      "edge_cases": [
+        "File name derived from date expression",
+        "RateType filter applied after load, not in copy"
+      ],
+      "complexity_hint": "Low",
+      "sha256": "12258b3a77ecb0f1af1e614636fe6a92693a010097651d551604d617ab24469e",
+      "inventory": {
+        "connection_managers": [
+          "FLATFILE:FF_FxRates",
+          "OLEDB:ETLControl",
+          "OLEDB:FinanceDW"
+        ],
+        "package_parameters": [
+          "BusinessDate"
+        ],
+        "user_variables": [
+          "BatchId",
+          "FxFilePath",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 5,
+          "Microsoft.Pipeline": 1
+        },
+        "containers": {},
+        "task_count": 6,
+        "container_count": 0,
+        "data_flow_components": {
+          "Microsoft.FlatFileSource": 1,
+          "Microsoft.OLEDBDestination": 1
+        },
+        "data_flow_component_count": 2,
+        "data_flow_paths": 1,
+        "precedence_constraints": 5,
+        "expression_constraints": 0,
+        "or_constraints": 0,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "02",
+      "name": "FIN_GL_JournalEntries_Incremental",
+      "file": "ssis/ContosoBank.EOD/FIN_GL_JournalEntries_Incremental.dtsx",
+      "description": "Watermark-based incremental extract of general ledger journal lines from core banking into dw.FactGLJournalLine.",
+      "domain": "Finance / General ledger",
+      "scenario": "High-watermark incremental extract and MERGE into fact table",
+      "regulatory_context": "Source of record for financial statements, FFIEC Call Report and SOX controls",
+      "schedule": "Daily after core banking EOD (orchestrated by ORCH_EOD_Regulatory_Batch_Master)",
+      "features": [
+        "SingleRow result binding into DateTime variables",
+        "Parameterized OLE DB source (? markers)",
+        "Derived Column with conditional/null handling",
+        "Row Count into variable",
+        "Expression + constraint precedence",
+        "OR (LogicalAnd=False) join of two branches",
+        "Stored procedure with OUTPUT parameter"
+      ],
+      "expected_adf": [
+        "Lookup activity for watermark",
+        "Copy activity with parameterized source query",
+        "If Condition or dependency expression on rows copied",
+        "Stored Procedure activity for MERGE and watermark update"
+      ],
+      "edge_cases": [
+        "Zero-row run must still advance watermark (OR path)",
+        "Row Count variable drives control flow -> needs Copy output.rowsCopied in ADF",
+        "NOLOCK hints on source"
+      ],
+      "complexity_hint": "Medium",
+      "sha256": "7d8eff8b051bbf88fe49419f2bd38d6a4176ace701e8ffc3e6a74b32a4d0f05a",
+      "inventory": {
+        "connection_managers": [
+          "OLEDB:CoreBanking",
+          "OLEDB:ETLControl",
+          "OLEDB:FinanceDW"
+        ],
+        "package_parameters": [],
+        "user_variables": [
+          "BatchId",
+          "LastWatermarkUtc",
+          "NewWatermarkUtc",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 6,
+          "Microsoft.Pipeline": 1
+        },
+        "containers": {},
+        "task_count": 7,
+        "container_count": 0,
+        "data_flow_components": {
+          "Microsoft.DerivedColumn": 1,
+          "Microsoft.OLEDBDestination": 1,
+          "Microsoft.OLEDBSource": 1,
+          "Microsoft.RowCount": 1
+        },
+        "data_flow_component_count": 4,
+        "data_flow_paths": 3,
+        "precedence_constraints": 7,
+        "expression_constraints": 2,
+        "or_constraints": 2,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "03",
+      "name": "OPS_Custodian_Positions_Ingest",
+      "file": "ssis/ContosoBank.EOD/OPS_Custodian_Positions_Ingest.dtsx",
+      "description": "Loops over custodian position files (one per custodian per day), validates identifiers, enriches with security master and stages positions for IBOR/ABOR reconciliation.",
+      "domain": "Investment operations / Custody",
+      "scenario": "Multi-file custodian position ingestion with validation, enrichment and rejects",
+      "regulatory_context": "Supports SEC Rule 17a-13 style position reconciliation and NAV oversight",
+      "schedule": "Daily 06:00 ET once custodian SFTP drops land",
+      "features": [
+        "Foreach File enumerator with folder expression",
+        "Flat file CM driven by loop variable",
+        "Derived Column type casts",
+        "Conditional Split (3 outputs)",
+        "Lookup with no-match output",
+        "Union All of reject streams",
+        "Row Count",
+        "Flat file destination for rejects",
+        "File System Task move on success / quarantine on failure (Failure constraint)"
+      ],
+      "expected_adf": [
+        "Get Metadata + ForEach",
+        "Mapping Data Flow (derive, split, lookup, union)",
+        "Copy/Delete activities or Azure Function for file move",
+        "Stored Procedure activity"
+      ],
+      "edge_cases": [
+        "'Zero Quantity' split output is unconnected -> rows silently dropped; reconciliation must catch it",
+        "Failure path inside loop: SSIS loop fails after quarantine unless MaximumErrorCount raised",
+        "UNC paths must be re-pointed to ADLS/Blob"
+      ],
+      "complexity_hint": "High",
+      "sha256": "130c78ef5061ffa8cd01f2d5a212a2b2924749ddee58a68a49e26cd6bb8939fc",
+      "inventory": {
+        "connection_managers": [
+          "FLATFILE:FF_CustodianPositions",
+          "FLATFILE:FF_PositionRejects",
+          "OLEDB:ETLControl",
+          "OLEDB:InvestmentOps"
+        ],
+        "package_parameters": [],
+        "user_variables": [
+          "ArchiveFolder",
+          "BatchId",
+          "CurrentFile",
+          "ErrorFolder",
+          "RejectFile",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 4,
+          "Microsoft.FileSystemTask": 2,
+          "Microsoft.Pipeline": 1
+        },
+        "containers": {
+          "STOCK:FOREACHLOOP": 1
+        },
+        "task_count": 7,
+        "container_count": 1,
+        "data_flow_components": {
+          "Microsoft.ConditionalSplit": 1,
+          "Microsoft.DerivedColumn": 1,
+          "Microsoft.FlatFileDestination": 1,
+          "Microsoft.FlatFileSource": 1,
+          "Microsoft.Lookup": 1,
+          "Microsoft.OLEDBDestination": 1,
+          "Microsoft.RowCount": 2,
+          "Microsoft.UnionAll": 1
+        },
+        "data_flow_component_count": 9,
+        "data_flow_paths": 9,
+        "precedence_constraints": 6,
+        "expression_constraints": 0,
+        "or_constraints": 0,
+        "failure_constraints": 1,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "04",
+      "name": "CRM_Customer_KYC_SCD2",
+      "file": "ssis/ContosoBank.EOD/CRM_Customer_KYC_SCD2.dtsx",
+      "description": "Maintains dw.DimCustomer as a Type 2 slowly changing dimension, tracking KYC risk rating, PEP flag, segment and country history for AML and conduct analytics.",
+      "domain": "Customer / KYC",
+      "scenario": "Type 2 slowly changing customer dimension with PII masking and KYC history",
+      "regulatory_context": "BSA/AML CDD rule (31 CFR 1010.230) customer risk profile history; GLBA PII handling",
+      "schedule": "Daily",
+      "features": [
+        "Sequence container",
+        "SCD wizard component (Microsoft.SCD)",
+        "OLE DB Command (row-by-row update)",
+        "Union All",
+        "Derived Column using package parameter",
+        "PII columns (DOB, tax id, email)",
+        "Data quality metrics SQL"
+      ],
+      "expected_adf": [
+        "Mapping Data Flow with Alter Row (upsert/expire) or Synapse/Azure SQL MERGE proc",
+        "Sequence flattened into dependsOn chain"
+      ],
+      "edge_cases": [
+        "SCD component has no ADF equivalent -> must be redesigned",
+        "OLE DB Command is row-by-row; set-based rewrite changes ordering semantics",
+        "PII must be classified and masked in the target"
+      ],
+      "complexity_hint": "High",
+      "sha256": "34000122d1712b0b08bb89916e5b10a1e934f703521c972f6f8aac3b18706e86",
+      "inventory": {
+        "connection_managers": [
+          "OLEDB:CRM",
+          "OLEDB:ETLControl",
+          "OLEDB:FinanceDW"
+        ],
+        "package_parameters": [
+          "BusinessDate"
+        ],
+        "user_variables": [
+          "BatchId",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 3,
+          "Microsoft.Pipeline": 1
+        },
+        "containers": {
+          "STOCK:SEQUENCE": 1
+        },
+        "task_count": 4,
+        "container_count": 1,
+        "data_flow_components": {
+          "Microsoft.DerivedColumn": 3,
+          "Microsoft.OLEDBCommand": 2,
+          "Microsoft.OLEDBDestination": 1,
+          "Microsoft.OLEDBSource": 1,
+          "Microsoft.RowCount": 1,
+          "Microsoft.SCD": 1,
+          "Microsoft.UnionAll": 1
+        },
+        "data_flow_component_count": 10,
+        "data_flow_paths": 10,
+        "precedence_constraints": 3,
+        "expression_constraints": 0,
+        "or_constraints": 0,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "05",
+      "name": "AML_CTR_Daily_Monitoring",
+      "file": "ssis/ContosoBank.EOD/AML_CTR_Daily_Monitoring.dtsx",
+      "description": "Aggregates daily cash-in/cash-out per customer, identifies Currency Transaction Report candidates over the $10,000 threshold, applies exemptions and structuring rules, and notifies the BSA officer.",
+      "domain": "Compliance / AML",
+      "scenario": "Daily Currency Transaction Report candidate detection",
+      "regulatory_context": "31 CFR 1010.311 CTR >$10,000; 31 CFR 1020.315 exemptions; FinCEN BSA E-Filing",
+      "schedule": "Daily after core EOD",
+      "features": [
+        "Aggregate with GroupBy/Sum/CountAll/CountDistinct",
+        "Conditional Split with project parameter",
+        "Multicast",
+        "C# Script Task with ADO.NET and connection manager",
+        "Send Mail with property expressions",
+        "Expression precedence constraint",
+        "OnError event handler logging"
+      ],
+      "expected_adf": [
+        "Mapping Data Flow (aggregate, split, new branch)",
+        "Azure Function or Stored Procedure replacing Script Task",
+        "Logic App / Web activity for email",
+        "Pipeline failure path for OnError"
+      ],
+      "edge_cases": [
+        "'Below Threshold' output intentionally unused",
+        "Script Task embeds business rules; exact SQL must be preserved",
+        "Threshold is project parameter, comparisons must keep decimal precision"
+      ],
+      "complexity_hint": "High",
+      "sha256": "c0ef46a7429d3b341703171e91a97ef97726dadaa064bd20fd0e232157a8d41e",
+      "inventory": {
+        "connection_managers": [
+          "OLEDB:Compliance",
+          "OLEDB:Compliance_ADO",
+          "OLEDB:CoreBanking",
+          "OLEDB:ETLControl",
+          "SMTP:SMTP_Contoso"
+        ],
+        "package_parameters": [
+          "BusinessDate"
+        ],
+        "user_variables": [
+          "BatchId",
+          "CtrCandidates",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 5,
+          "Microsoft.Pipeline": 1,
+          "Microsoft.ScriptTask": 1,
+          "Microsoft.SendMailTask": 1
+        },
+        "containers": {},
+        "task_count": 8,
+        "container_count": 0,
+        "data_flow_components": {
+          "Microsoft.Aggregate": 2,
+          "Microsoft.ConditionalSplit": 1,
+          "Microsoft.DerivedColumn": 2,
+          "Microsoft.Multicast": 1,
+          "Microsoft.OLEDBDestination": 3,
+          "Microsoft.OLEDBSource": 1
+        },
+        "data_flow_component_count": 10,
+        "data_flow_paths": 9,
+        "precedence_constraints": 6,
+        "expression_constraints": 1,
+        "or_constraints": 0,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [
+          "OnError"
+        ],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "06",
+      "name": "PAY_ACH_NACHA_Outbound",
+      "file": "ssis/ContosoBank.EOD/PAY_ACH_NACHA_Outbound.dtsx",
+      "description": "Builds NACHA-formatted ACH origination files per company batch, PGP-encrypts them and transmits via SFTP to the ACH operator, then marks batches as transmitted.",
+      "domain": "Payments / ACH",
+      "scenario": "Outbound NACHA file generation, encryption and SFTP transmission per batch",
+      "regulatory_context": "Nacha Operating Rules file format; 2026 fraud monitoring rule phases; cutoff SLAs",
+      "schedule": "Multiple windows per day ahead of ACH operator cutoffs",
+      "features": [
+        "Full result set into Object variable",
+        "Foreach ADO enumerator with variable mappings",
+        "Script Component (C#) generating fixed-width records",
+        "Single-column flat file destination",
+        "Execute Process (gpg, WinSCP) with Arguments expressions",
+        "Script Task reading sensitive parameter via GetSensitiveValue",
+        "File System delete + move",
+        "ProtectionLevel=EncryptSensitiveWithUserKey"
+      ],
+      "expected_adf": [
+        "Lookup + ForEach",
+        "Azure Function for NACHA formatting/PGP",
+        "SFTP linked service + Copy activity (Key Vault secret)",
+        "Stored Procedure activity"
+      ],
+      "edge_cases": [
+        "Local executables (gpg.exe, WinSCP.com) do not exist in ADF",
+        "Sensitive parameter must move to Key Vault",
+        "Byte-exact output: reconciliation must compare file hash/length, not just row counts",
+        "ProtectionLevel=1 means sensitive values unreadable on another machine"
+      ],
+      "complexity_hint": "Very High",
+      "sha256": "d1f74fbbbe3c291eb3eba735144c85baefac55854fe06d02b70ed5c75b0c7a6e",
+      "inventory": {
+        "connection_managers": [
+          "FLATFILE:FF_NachaOut",
+          "OLEDB:CoreBanking",
+          "OLEDB:ETLControl",
+          "SMTP:SMTP_Contoso"
+        ],
+        "package_parameters": [],
+        "user_variables": [
+          "BatchId",
+          "CurrentAchBatchId",
+          "CurrentCompanyId",
+          "EncryptedFile",
+          "NachaFile",
+          "PendingBatches",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected",
+          "SentFolder",
+          "WinScpScriptPath"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteProcess": 2,
+          "Microsoft.ExecuteSQLTask": 4,
+          "Microsoft.FileSystemTask": 2,
+          "Microsoft.Pipeline": 1,
+          "Microsoft.ScriptTask": 1,
+          "Microsoft.SendMailTask": 1
+        },
+        "containers": {
+          "STOCK:FOREACHLOOP": 1
+        },
+        "task_count": 11,
+        "container_count": 1,
+        "data_flow_components": {
+          "Microsoft.FlatFileDestination": 1,
+          "Microsoft.ManagedComponentHost": 1,
+          "Microsoft.OLEDBSource": 1
+        },
+        "data_flow_component_count": 3,
+        "data_flow_paths": 2,
+        "precedence_constraints": 10,
+        "expression_constraints": 0,
+        "or_constraints": 0,
+        "failure_constraints": 1,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 1
+      }
+    },
+    {
+      "id": "07",
+      "name": "TRS_Bank_Statement_Reconciliation",
+      "file": "ssis/ContosoBank.EOD/TRS_Bank_Statement_Reconciliation.dtsx",
+      "description": "Reconciles parsed bank statement lines (BAI2 / camt.053) against GL cash ledger postings, classifies matches and breaks, and alerts treasury operations.",
+      "domain": "Treasury / Cash management",
+      "scenario": "Daily bank statement vs GL cash reconciliation",
+      "regulatory_context": "SOX cash controls; intraday liquidity monitoring (BCBS 248)",
+      "schedule": "Daily after prior-day BAI2/camt.053 statements are parsed",
+      "features": [
+        "Two sources from different connection managers",
+        "Sort x2 + Merge Join (full outer, 2 keys)",
+        "Derived Column nested conditional with tolerance parameter",
+        "Conditional Split",
+        "Multicast",
+        "Aggregate summary",
+        "Expression precedence + OR join",
+        "Send Mail with expression subject"
+      ],
+      "expected_adf": [
+        "Mapping Data Flow with Join (full outer) - sorts unnecessary",
+        "Lookup activity + If Condition",
+        "Logic App for email"
+      ],
+      "edge_cases": [
+        "Sort/Merge Join null semantics (TreatNullsAsEqual) differ from Spark join",
+        "Decimal(19,2) tolerance math must match exactly",
+        "Duplicate bank references -> many-to-many join explosion"
+      ],
+      "complexity_hint": "High",
+      "sha256": "fd49c0c1d996e85a4981419d59147ca174d51da6333ec3a95528b2ce850f81b7",
+      "inventory": {
+        "connection_managers": [
+          "OLEDB:ETLControl",
+          "OLEDB:FinanceDW",
+          "OLEDB:Treasury",
+          "SMTP:SMTP_Contoso"
+        ],
+        "package_parameters": [
+          "BusinessDate",
+          "AmountTolerance"
+        ],
+        "user_variables": [
+          "BatchId",
+          "BreakCount",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 5,
+          "Microsoft.Pipeline": 1,
+          "Microsoft.SendMailTask": 1
+        },
+        "containers": {},
+        "task_count": 7,
+        "container_count": 0,
+        "data_flow_components": {
+          "Microsoft.Aggregate": 1,
+          "Microsoft.ConditionalSplit": 1,
+          "Microsoft.DerivedColumn": 1,
+          "Microsoft.MergeJoin": 1,
+          "Microsoft.Multicast": 1,
+          "Microsoft.OLEDBDestination": 3,
+          "Microsoft.OLEDBSource": 2,
+          "Microsoft.Sort": 2
+        },
+        "data_flow_component_count": 12,
+        "data_flow_paths": 11,
+        "precedence_constraints": 7,
+        "expression_constraints": 2,
+        "or_constraints": 2,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "08",
+      "name": "RISK_Credit_Exposure_Aggregation",
+      "file": "ssis/ContosoBank.EOD/RISK_Credit_Exposure_Aggregation.dtsx",
+      "description": "Aggregates commercial, mortgage and card exposures to counterparty level in USD for risk data aggregation (BCBS 239) and FR Y-14Q style quarterly schedules.",
+      "domain": "Risk / Credit risk",
+      "scenario": "Multi-portfolio exposure aggregation to counterparty in USD",
+      "regulatory_context": "BCBS 239 risk data aggregation; FR Y-14Q corporate loan schedule; large exposure limits",
+      "schedule": "Daily; quarter-end run feeds FR Y-14Q",
+      "features": [
+        "Three OLE DB sources across two connection managers",
+        "OPENQUERY linked server",
+        "Four-part and three-part (cross-database) names",
+        "Union All",
+        "Lookup (FX)",
+        "Chained Derived Columns using parameters",
+        "Multicast",
+        "Aggregate (Sum/Max/CountAll)",
+        "Cross-server INSERT in Execute SQL"
+      ],
+      "expected_adf": [
+        "Mapping Data Flow or ELT in Azure SQL/Fabric Warehouse",
+        "Linked servers replaced by separate linked services / external tables"
+      ],
+      "edge_cases": [
+        "Linked servers and cross-DB joins are not supported in Azure SQL Database",
+        "FX lookup uses MAX(RateDate) not business date (latent bug to surface)",
+        "Lookup no-match rows go to side table -> totals reconciliation must include them"
+      ],
+      "complexity_hint": "High",
+      "sha256": "a50276c1f5fc835d7c8b30eb7847ea4af1ba751527d37e7861ff3adae7e046fc",
+      "inventory": {
+        "connection_managers": [
+          "OLEDB:CardsLegacy",
+          "OLEDB:CoreBanking",
+          "OLEDB:ETLControl",
+          "OLEDB:FinanceDW",
+          "OLEDB:RiskMart"
+        ],
+        "package_parameters": [
+          "BusinessDate",
+          "CreditConversionFactor"
+        ],
+        "user_variables": [
+          "BatchId",
+          "LargeExposureCount",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 5,
+          "Microsoft.Pipeline": 1
+        },
+        "containers": {},
+        "task_count": 6,
+        "container_count": 0,
+        "data_flow_components": {
+          "Microsoft.Aggregate": 1,
+          "Microsoft.DerivedColumn": 2,
+          "Microsoft.Lookup": 1,
+          "Microsoft.Multicast": 1,
+          "Microsoft.OLEDBDestination": 3,
+          "Microsoft.OLEDBSource": 3,
+          "Microsoft.RowCount": 1,
+          "Microsoft.UnionAll": 1
+        },
+        "data_flow_component_count": 13,
+        "data_flow_paths": 12,
+        "precedence_constraints": 5,
+        "expression_constraints": 0,
+        "or_constraints": 0,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "09",
+      "name": "CMP_OFAC_Sanctions_Screening",
+      "file": "ssis/ContosoBank.EOD/CMP_OFAC_Sanctions_Screening.dtsx",
+      "description": "Downloads the OFAC SDN list, loads it, and fuzzy-matches customer names against it to create sanctions alerts and a review queue.",
+      "domain": "Compliance / Sanctions",
+      "scenario": "OFAC SDN download and fuzzy customer name screening",
+      "regulatory_context": "OFAC sanctions compliance (31 CFR Chapter V); evidence of list version used",
+      "schedule": "Daily, plus on-demand when OFAC publishes updates",
+      "features": [
+        "Script Task HTTP download via proxy with hash evidence",
+        "Headerless flat file with 12 columns",
+        "Fuzzy Lookup (Enterprise edition)",
+        "Conditional Split on _Similarity/_Confidence",
+        "Row Count driving email",
+        "OnError event handler"
+      ],
+      "expected_adf": [
+        "Web/Copy activity (HTTP linked service) for download",
+        "No native fuzzy lookup: Azure AI Search / Spark notebook / SQL similarity function",
+        "Logic App for alert email"
+      ],
+      "edge_cases": [
+        "Fuzzy Lookup has no ADF equivalent and match scores will differ after migration",
+        "False-negative risk: reconciliation must compare alert sets, not counts",
+        "Corporate proxy and hash evidence must be preserved"
+      ],
+      "complexity_hint": "Very High",
+      "sha256": "f5883ddc9ca11014dce8f00fabb8f591ee677870afbfe5cc071b2893986e28b8",
+      "inventory": {
+        "connection_managers": [
+          "FLATFILE:FF_SdnList",
+          "OLEDB:CRM",
+          "OLEDB:Compliance",
+          "OLEDB:ETLControl",
+          "SMTP:SMTP_Contoso"
+        ],
+        "package_parameters": [
+          "SdnListUrl",
+          "MinSimilarity"
+        ],
+        "user_variables": [
+          "AlertCount",
+          "BatchId",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected",
+          "SdnFileHash",
+          "SdnFilePath"
+        ],
+        "tasks": {
+          "Microsoft.ExecuteSQLTask": 4,
+          "Microsoft.Pipeline": 2,
+          "Microsoft.ScriptTask": 1,
+          "Microsoft.SendMailTask": 1
+        },
+        "containers": {},
+        "task_count": 8,
+        "container_count": 0,
+        "data_flow_components": {
+          "Microsoft.BestMatch": 1,
+          "Microsoft.ConditionalSplit": 1,
+          "Microsoft.DerivedColumn": 4,
+          "Microsoft.FlatFileSource": 1,
+          "Microsoft.OLEDBDestination": 3,
+          "Microsoft.OLEDBSource": 1,
+          "Microsoft.RowCount": 1
+        },
+        "data_flow_component_count": 12,
+        "data_flow_paths": 10,
+        "precedence_constraints": 6,
+        "expression_constraints": 1,
+        "or_constraints": 0,
+        "failure_constraints": 0,
+        "completion_constraints": 0,
+        "event_handlers": [
+          "OnError"
+        ],
+        "protection_level": 0
+      }
+    },
+    {
+      "id": "10",
+      "name": "ORCH_EOD_Regulatory_Batch_Master",
+      "file": "ssis/ContosoBank.EOD/ORCH_EOD_Regulatory_Batch_Master.dtsx",
+      "description": "Master end-of-day orchestration: waits for core banking EOD, then runs reference data, finance, payments and regulatory child packages with dependency and failure handling.",
+      "domain": "Orchestration",
+      "scenario": "End-of-day master orchestration across finance, payments, risk and compliance",
+      "regulatory_context": "Timely regulatory reporting SLAs; BCBS 239 timeliness and completeness",
+      "schedule": "SQL Agent job, weeknights 21:00 ET (Sprint 2 adds the job definition)",
+      "features": [
+        "For Loop polling with WAITFOR",
+        "Execute Package Task (project reference) x9",
+        "Parameter assignments to child packages",
+        "Parallel tasks inside Sequence containers",
+        "Expression constraints for success/timeout branches",
+        "Completion constraints",
+        "OR (LogicalAnd=False) failure fan-in",
+        "OnError event handler email"
+      ],
+      "expected_adf": [
+        "Until activity with Wait",
+        "Execute Pipeline activities (waitOnCompletion)",
+        "Parallel branches via dependsOn",
+        "Pipeline parameters passed to children"
+      ],
+      "edge_cases": [
+        "For Loop EvalExpression must be negated for ADF Until",
+        "Completion constraint means payments failure does not block close",
+        "Sequence-level Failure constraints fire if any child fails",
+        "Child packages must be converted first (dependency order)"
+      ],
+      "complexity_hint": "Medium",
+      "sha256": "5c4e10564d7be6fcab99918648a833b246e13b725da486746d430e38157b9fb1",
+      "inventory": {
+        "connection_managers": [
+          "OLEDB:CoreBanking",
+          "OLEDB:ETLControl",
+          "SMTP:SMTP_Contoso"
+        ],
+        "package_parameters": [
+          "BusinessDate"
+        ],
+        "user_variables": [
+          "BatchId",
+          "EodComplete",
+          "MaxPollAttempts",
+          "PollAttempt",
+          "RowsExtracted",
+          "RowsLoaded",
+          "RowsRejected"
+        ],
+        "tasks": {
+          "Microsoft.ExecutePackageTask": 9,
+          "Microsoft.ExecuteSQLTask": 6,
+          "Microsoft.SendMailTask": 2
+        },
+        "containers": {
+          "STOCK:FORLOOP": 1,
+          "STOCK:SEQUENCE": 3
+        },
+        "task_count": 17,
+        "container_count": 4,
+        "data_flow_components": {},
+        "data_flow_component_count": 0,
+        "data_flow_paths": 0,
+        "precedence_constraints": 13,
+        "expression_constraints": 3,
+        "or_constraints": 2,
+        "failure_constraints": 2,
+        "completion_constraints": 2,
+        "event_handlers": [
+          "OnError"
+        ],
+        "protection_level": 0
+      }
+    }
+  ],
+  "project_parameters": [
+    {
+      "name": "Environment",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "DEV | UAT | PROD"
+    },
+    {
+      "name": "CoreBankingConnStr",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Core banking OLTP (read-only replica)"
+    },
+    {
+      "name": "FinanceDWConnStr",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Enterprise finance data warehouse"
+    },
+    {
+      "name": "ETLControlConnStr",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Batch control, watermarks and audit"
+    },
+    {
+      "name": "InboundRoot",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Inbound landing share"
+    },
+    {
+      "name": "ArchiveRoot",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Archive share"
+    },
+    {
+      "name": "OutboundRoot",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Outbound staging share"
+    },
+    {
+      "name": "SftpHost",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Bank ACH operator SFTP endpoint (fictional)"
+    },
+    {
+      "name": "SftpUser",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "SFTP user"
+    },
+    {
+      "name": "SftpPassword",
+      "type": "String",
+      "required": true,
+      "sensitive": true,
+      "description": "SFTP password (sensitive; fake encrypted blob)"
+    },
+    {
+      "name": "PgpRecipient",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "PGP key id for outbound files"
+    },
+    {
+      "name": "BsaOfficerEmail",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "BSA/AML officer distribution list"
+    },
+    {
+      "name": "OpsAlertEmail",
+      "type": "String",
+      "required": true,
+      "sensitive": false,
+      "description": "Operations alert distribution list"
+    },
+    {
+      "name": "CtrThresholdUsd",
+      "type": "Decimal",
+      "required": true,
+      "sensitive": false,
+      "description": "31 CFR 1010.311 CTR threshold"
+    }
+  ]
+}

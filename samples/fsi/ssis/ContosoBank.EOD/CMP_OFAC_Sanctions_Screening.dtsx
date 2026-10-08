@@ -1,0 +1,873 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" xmlns:SendMailTask="www.microsoft.com/sqlserver/dts/tasks/sendmailtask" DTS:refId="Package" DTS:CreationDate="1/15/2026 9:00:00 AM" DTS:CreationName="Microsoft.Package" DTS:CreatorComputerName="CONTOSO-ETLDEV01" DTS:CreatorName="CONTOSO\svc_ssis_dev" DTS:Description="Downloads the OFAC SDN list, loads it, and fuzzy-matches customer names against it to create sanctions alerts and a review queue." DTS:DTSID="{6C0B5B11-08AD-50F1-8F0D-2EB4E9173B03}" DTS:ExecutableType="Microsoft.Package" DTS:LastModifiedProductVersion="15.0.2000.180" DTS:LocaleID="1033" DTS:ObjectName="CMP_OFAC_Sanctions_Screening" DTS:PackageType="5" DTS:ProtectionLevel="0" DTS:VersionBuild="12" DTS:VersionGUID="{92652C7D-AC31-5F3B-8739-077162D048DC}">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[CRM]" DTS:CreationName="OLEDB" DTS:DTSID="{9A2333E0-C8BD-5698-A13A-BD4CA47236CC}" DTS:ObjectName="CRM">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=CRMSQL01.contoso.local;Initial Catalog=ContosoCRM;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-CMP_OFAC_Sanctions_Screening-CRM;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[Compliance]" DTS:CreationName="OLEDB" DTS:DTSID="{326A4BEA-779A-562F-AAC2-C3A61EECDACF}" DTS:ObjectName="Compliance">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=CMPSQL01.contoso.local;Initial Catalog=Compliance;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-CMP_OFAC_Sanctions_Screening-Compliance;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ETLControl]" DTS:CreationName="OLEDB" DTS:DTSID="{ED70B637-671B-5548-BC0F-15C628435E7E}" DTS:ObjectName="ETLControl">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::ETLControlConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=ETLSQL01.contoso.local;Initial Catalog=ETLControl;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-CMP_OFAC_Sanctions_Screening-ETLControl;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[SMTP_Contoso]" DTS:CreationName="SMTP" DTS:DTSID="{C0F70DA2-1E46-50D2-B7D7-650E32927996}" DTS:ObjectName="SMTP_Contoso">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="SmtpServer=smtp.contoso.local;UseWindowsAuthentication=True;EnableSsl=True;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[FF_SdnList]" DTS:CreationName="FLATFILE" DTS:DTSID="{421FE1BA-2459-5ABB-BB2A-006625E5D1CB}" DTS:ObjectName="FF_SdnList">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[User::SdnFilePath]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:Format="Delimited" DTS:LocaleID="1033" DTS:Unicode="False" DTS:HeaderRowDelimiter="_x000D__x000A_" DTS:ColumnNamesInFirstDataRow="False" DTS:RowDelimiter="" DTS:TextQualifier="_x0022_" DTS:CodePage="1252" DTS:ConnectionString="\\fileshare01.contoso.local\etl\inbound\ofac\SDN.csv">
+          <DTS:FlatFileColumns>
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="10" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="EntNum" DTS:DTSID="{436F5B6F-ACDA-538B-9455-7191945AC586}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="350" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="SdnName" DTS:DTSID="{D5A8312A-AC09-59AA-9722-28415B64DAC6}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="12" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="SdnType" DTS:DTSID="{692CCFD3-BF0D-5D91-BEB9-48222C5E22FB}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="200" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="Program" DTS:DTSID="{08694C26-BA48-5E9C-A4DB-91B73A0F62EF}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="200" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="Title" DTS:DTSID="{6F5B3C7E-CD2D-5715-AEE6-2D6ED338A1BA}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="8" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="CallSign" DTS:DTSID="{699B5715-0BEE-5469-A08A-70BD4800D47A}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="25" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="VesselType" DTS:DTSID="{2EFB74A4-C310-58E6-84BA-824479F1BCF9}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="14" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="Tonnage" DTS:DTSID="{2D15968F-128F-51F5-AF6E-E676B5AE16EE}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="8" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="Grt" DTS:DTSID="{3B6A73F3-1F1D-5025-A664-E84905F63014}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="40" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="VesselFlag" DTS:DTSID="{4B1C2B7E-1EB5-5065-B10C-6457579D94C9}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x002C_" DTS:MaximumWidth="150" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="VesselOwner" DTS:DTSID="{F72E5B0F-E33A-538B-9277-9BC3D2BBCE3E}" DTS:CreationName="" />
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x000D__x000A_" DTS:MaximumWidth="1000" DTS:DataType="129" DTS:TextQualified="True" DTS:ObjectName="Remarks" DTS:DTSID="{57600707-9BCF-54EF-AE60-D2F15183D099}" DTS:CreationName="" />
+          </DTS:FlatFileColumns>
+        </DTS:ConnectionManager>
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:PackageParameters>
+    <DTS:PackageParameter DTS:CreationName="" DTS:DataType="18" DTS:Description="OFAC Sanctions List Service SDN CSV export" DTS:DTSID="{020C3791-FB6D-5C5B-BCAE-4F3BAEA6FED8}" DTS:ObjectName="SdnListUrl" DTS:Required="True">
+      <DTS:Property DTS:DataType="18" DTS:Name="ParameterValue">https://sanctionslistservice.ofac.treas.gov/api/PublicationPreview/exports/SDN.CSV</DTS:Property>
+    </DTS:PackageParameter>
+    <DTS:PackageParameter DTS:CreationName="" DTS:DataType="15" DTS:DTSID="{62F546F4-8AEC-5BFC-8925-8CCD1DA7F22F}" DTS:ObjectName="MinSimilarity">
+      <DTS:Property DTS:DataType="15" DTS:Name="ParameterValue">0.80</DTS:Property>
+    </DTS:PackageParameter>
+  </DTS:PackageParameters>
+  <DTS:Variables>
+    <DTS:Variable DTS:CreationName="" DTS:Description="ETLControl batch id" DTS:DTSID="{FBE6E118-0673-5F34-BCFC-A80EF1220360}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="BatchId">
+      <DTS:VariableValue DTS:DataType="20">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{92B14D63-AE07-5B92-A732-5409678DEEB0}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsExtracted">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{FB3D4BE1-C928-59C5-AC2C-B818CF939740}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsLoaded">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{E2763F9C-5179-53F1-92CC-8583C28731A7}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsRejected">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{262D1B2E-AABB-5B0E-8EA3-63D21CB97C1F}" DTS:EvaluateAsExpression="True" DTS:Expression="@[$Project::InboundRoot] + &quot;\\ofac\\SDN_&quot; + (DT_WSTR,4)YEAR(GETDATE()) + RIGHT(&quot;0&quot; + (DT_WSTR,2)MONTH(GETDATE()),2) + RIGHT(&quot;0&quot; + (DT_WSTR,2)DAY(GETDATE()),2) + &quot;.csv&quot;" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="SdnFilePath">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{07451BD9-F260-5957-A0E2-B3F916A75714}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="SdnFileHash">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{53D7AD52-1C5D-51DF-8D13-805646286D8B}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="AlertCount">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Start Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Register OFAC screening run in ETLControl.etl.Batch" DTS:DTSID="{8067CE65-5E6E-5086-A55F-7B960D42E470}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Start Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{ED70B637-671B-5548-BC0F-15C628435E7E}" SQLTask:SqlStatementSource="EXEC etl.usp_StartBatch @ProcessName = ?, @PackageName = ?, @ExecutionId = ?, @BatchId = ? OUTPUT;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="System::ServerExecutionID" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Output" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SCR Download SDN List" DTS:CreationName="Microsoft.ScriptTask" DTS:Description="C#: HTTPS download via proxy + SHA-256 evidence" DTS:DTSID="{730D387E-3393-52B7-A408-63D619ACF5F3}" DTS:ExecutableType="Microsoft.ScriptTask" DTS:LocaleID="-1" DTS:ObjectName="SCR Download SDN List" DTS:TaskContact="" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <ScriptProject Name="ST_730d387e339352b7a40863d619acf5f3" VSTAMajorVersion="15" VSTAMinorVersion="0" Language="CSharp" ReadOnlyVariables="$Package::SdnListUrl,User::SdnFilePath" ReadWriteVariables="User::SdnFileHash">
+          <ProjectItem Name="ScriptMain.cs" Encoding="UTF8">#region Namespaces
+using System;
+using System.IO;
+using System.Net;
+using Microsoft.SqlServer.Dts.Runtime;
+#endregion
+
+namespace ST_DownloadSdn
+{
+    [Microsoft.SqlServer.Dts.Tasks.ScriptTask.SSISScriptTaskEntryPointAttribute]
+    public partial class ScriptMain : Microsoft.SqlServer.Dts.Tasks.ScriptTask.VSTARTScriptObjectModelBase
+    {
+        // Downloads the OFAC SDN list (CSV) through the corporate proxy and records its SHA-256
+        // so compliance can evidence which list version was used for screening.
+        public void Main()
+        {
+            string url = (string)Dts.Variables["$Package::SdnListUrl"].Value;
+            string target = (string)Dts.Variables["User::SdnFilePath"].Value;
+            try
+            {
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                using (var client = new WebClient())
+                {
+                    client.Proxy = new WebProxy("http://proxy.contoso.local:8080", true) { UseDefaultCredentials = true };
+                    client.DownloadFile(url, target);
+                }
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                using (var fs = File.OpenRead(target))
+                {
+                    Dts.Variables["User::SdnFileHash"].Value = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "");
+                }
+                if (new FileInfo(target).Length &lt; 1024 * 100)
+                {
+                    Dts.Events.FireError(0, "SDN Download", "SDN file unexpectedly small - aborting screening", "", 0);
+                    Dts.TaskResult = (int)ScriptResults.Failure;
+                    return;
+                }
+                Dts.TaskResult = (int)ScriptResults.Success;
+            }
+            catch (WebException ex)
+            {
+                Dts.Events.FireError(0, "SDN Download", ex.Message, "", 0);
+                Dts.TaskResult = (int)ScriptResults.Failure;
+            }
+        }
+
+        enum ScriptResults
+        {
+            Success = Microsoft.SqlServer.Dts.Runtime.DTSExecResult.Success,
+            Failure = Microsoft.SqlServer.Dts.Runtime.DTSExecResult.Failure
+        };
+    }
+}
+</ProjectItem>
+          <ProjectItem Name="ST_730d387e339352b7a40863d619acf5f3.csproj" Encoding="UTF8">&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003"&gt;
+  &lt;PropertyGroup&gt;&lt;AssemblyName&gt;ST_730d387e339352b7a40863d619acf5f3&lt;/AssemblyName&gt;&lt;RootNamespace&gt;ST_730d387e339352b7a40863d619acf5f3&lt;/RootNamespace&gt;&lt;TargetFrameworkVersion&gt;v4.7&lt;/TargetFrameworkVersion&gt;&lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;&lt;Compile Include="ScriptMain.cs" /&gt;&lt;/ItemGroup&gt;
+&lt;/Project&gt;
+</ProjectItem>
+        </ScriptProject>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Truncate SDN" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{FF83C8F3-9773-5ED4-A676-DF73C827E031}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Truncate SDN" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{326A4BEA-779A-562F-AAC2-C3A61EECDACF}" SQLTask:SqlStatementSource="TRUNCATE TABLE cmp.SdnEntry; INSERT INTO cmp.SdnListVersion (BatchId, FileHash, LoadedUtc) VALUES (?, ?, SYSUTCDATETIME());">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::SdnFileHash" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\DFT Load SDN List" DTS:CreationName="Microsoft.Pipeline" DTS:Description="Data Flow Task" DTS:DTSID="{A37195FE-E645-5FD0-844C-4748885110D6}" DTS:ExecutableType="Microsoft.Pipeline" DTS:LocaleID="-1" DTS:ObjectName="DFT Load SDN List" DTS:TaskContact="Performs high-performance data extraction, transformation and loading;Microsoft Corporation; Microsoft SQL Server; (C) Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT Load SDN List\FF Source SDN" componentClassID="Microsoft.FlatFileSource" description="Flat File Source" name="FF Source SDN" version="1" usesDispositions="true">
+              <properties>
+                <property dataType="System.Boolean" name="RetainNulls">false</property>
+                <property dataType="System.String" name="FileNameColumnName" />
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Load SDN List\FF Source SDN.Connections[FlatFileConnection]" connectionManagerID="Package.ConnectionManagers[FF_SdnList]" connectionManagerRefId="Package.ConnectionManagers[FF_SdnList]" name="FlatFileConnection" />
+              </connections>
+              <outputs>
+                <output refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output]" name="Flat File Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[EntNum]" dataType="str" length="10" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[EntNum]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[EntNum]" name="EntNum">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnName]" dataType="str" length="350" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[SdnName]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnName]" name="SdnName">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnType]" dataType="str" length="12" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[SdnType]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnType]" name="SdnType">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Program]" dataType="str" length="200" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Program]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Program]" name="Program">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Title]" dataType="str" length="200" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Title]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Title]" name="Title">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[CallSign]" dataType="str" length="8" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[CallSign]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[CallSign]" name="CallSign">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselType]" dataType="str" length="25" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[VesselType]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselType]" name="VesselType">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Tonnage]" dataType="str" length="14" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Tonnage]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Tonnage]" name="Tonnage">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Grt]" dataType="str" length="8" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Grt]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Grt]" name="Grt">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselFlag]" dataType="str" length="40" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[VesselFlag]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselFlag]" name="VesselFlag">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselOwner]" dataType="str" length="150" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[VesselOwner]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselOwner]" name="VesselOwner">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Remarks]" dataType="str" length="1000" codePage="1252" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Remarks]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Remarks]" name="Remarks">
+                      <properties>
+                        <property dataType="System.Boolean" name="FastParse">false</property>
+                        <property dataType="System.Boolean" name="UseBinaryFormat">false</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[EntNum]" dataType="str" length="10" codePage="1252" name="EntNum" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[SdnName]" dataType="str" length="350" codePage="1252" name="SdnName" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[SdnType]" dataType="str" length="12" codePage="1252" name="SdnType" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Program]" dataType="str" length="200" codePage="1252" name="Program" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Title]" dataType="str" length="200" codePage="1252" name="Title" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[CallSign]" dataType="str" length="8" codePage="1252" name="CallSign" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[VesselType]" dataType="str" length="25" codePage="1252" name="VesselType" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Tonnage]" dataType="str" length="14" codePage="1252" name="Tonnage" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Grt]" dataType="str" length="8" codePage="1252" name="Grt" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[VesselFlag]" dataType="str" length="40" codePage="1252" name="VesselFlag" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[VesselOwner]" dataType="str" length="150" codePage="1252" name="VesselOwner" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].ExternalColumns[Remarks]" dataType="str" length="1000" codePage="1252" name="Remarks" />
+                  </externalMetadataColumns>
+                </output>
+                <output refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Error Output]" isErrorOut="true" name="Flat File Source Error Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Load SDN List\DER Normalize SDN" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Normalize SDN" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Load SDN List\DER Normalize SDN.Inputs[Derived Column Input]" name="Derived Column Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Load SDN List\DER Normalize SDN.Inputs[Derived Column Input].Columns[SdnName]" cachedDataType="str" cachedLength="350" cachedCodepage="1252" cachedName="SdnName" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnName]" />
+                    <inputColumn refId="Package\DFT Load SDN List\DER Normalize SDN.Inputs[Derived Column Input].Columns[SdnType]" cachedDataType="str" cachedLength="12" cachedCodepage="1252" cachedName="SdnType" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnType]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\DFT Load SDN List\DER Normalize SDN.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output].Columns[NormalizedName]" dataType="wstr" length="350" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output].Columns[NormalizedName]" name="NormalizedName">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">UPPER(TRIM(REPLACE(REPLACE(#{Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnName]}, ",", " "), ".", "")))</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">UPPER(TRIM(REPLACE(REPLACE([SdnName], ",", " "), ".", "")))</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output].Columns[IsNullPlaceholder]" dataType="bool" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output].Columns[IsNullPlaceholder]" name="IsNullPlaceholder">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">#{Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnType]} == "-0- "</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">[SdnType] == "-0- "</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\DFT Load SDN List\DER Normalize SDN.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Load SDN List\OLE DST SdnEntry" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST SdnEntry" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[cmp].[SdnEntry]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Load SDN List\OLE DST SdnEntry.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Compliance]" connectionManagerRefId="Package.ConnectionManagers[Compliance]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[EntNum]" cachedDataType="str" cachedLength="10" cachedCodepage="1252" cachedName="EntNum" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[EntNum]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[EntNum]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[SdnName]" cachedDataType="str" cachedLength="350" cachedCodepage="1252" cachedName="SdnName" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[SdnName]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnName]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[SdnType]" cachedDataType="str" cachedLength="12" cachedCodepage="1252" cachedName="SdnType" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[SdnType]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[SdnType]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[Program]" cachedDataType="str" cachedLength="200" cachedCodepage="1252" cachedName="Program" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Program]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Program]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[Title]" cachedDataType="str" cachedLength="200" cachedCodepage="1252" cachedName="Title" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Title]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Title]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[CallSign]" cachedDataType="str" cachedLength="8" cachedCodepage="1252" cachedName="CallSign" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[CallSign]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[CallSign]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[VesselType]" cachedDataType="str" cachedLength="25" cachedCodepage="1252" cachedName="VesselType" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[VesselType]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselType]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[Tonnage]" cachedDataType="str" cachedLength="14" cachedCodepage="1252" cachedName="Tonnage" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Tonnage]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Tonnage]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[Grt]" cachedDataType="str" cachedLength="8" cachedCodepage="1252" cachedName="Grt" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Grt]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Grt]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[VesselFlag]" cachedDataType="str" cachedLength="40" cachedCodepage="1252" cachedName="VesselFlag" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[VesselFlag]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselFlag]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[VesselOwner]" cachedDataType="str" cachedLength="150" cachedCodepage="1252" cachedName="VesselOwner" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[VesselOwner]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[VesselOwner]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[Remarks]" cachedDataType="str" cachedLength="1000" cachedCodepage="1252" cachedName="Remarks" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Remarks]" lineageId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output].Columns[Remarks]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[NormalizedName]" cachedDataType="wstr" cachedLength="350" cachedName="NormalizedName" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[NormalizedName]" lineageId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output].Columns[NormalizedName]" />
+                    <inputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].Columns[IsNullPlaceholder]" cachedDataType="bool" cachedName="IsNullPlaceholder" externalMetadataColumnId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[IsNullPlaceholder]" lineageId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output].Columns[IsNullPlaceholder]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[EntNum]" dataType="str" length="10" codePage="1252" name="EntNum" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[SdnName]" dataType="str" length="350" codePage="1252" name="SdnName" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[SdnType]" dataType="str" length="12" codePage="1252" name="SdnType" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Program]" dataType="str" length="200" codePage="1252" name="Program" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Title]" dataType="str" length="200" codePage="1252" name="Title" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[CallSign]" dataType="str" length="8" codePage="1252" name="CallSign" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[VesselType]" dataType="str" length="25" codePage="1252" name="VesselType" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Tonnage]" dataType="str" length="14" codePage="1252" name="Tonnage" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Grt]" dataType="str" length="8" codePage="1252" name="Grt" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[VesselFlag]" dataType="str" length="40" codePage="1252" name="VesselFlag" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[VesselOwner]" dataType="str" length="150" codePage="1252" name="VesselOwner" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[Remarks]" dataType="str" length="1000" codePage="1252" name="Remarks" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[NormalizedName]" dataType="wstr" length="350" name="NormalizedName" />
+                    <externalMetadataColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input].ExternalColumns[IsNullPlaceholder]" dataType="bool" name="IsNullPlaceholder" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Load SDN List\OLE DST SdnEntry.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Load SDN List\OLE DST SdnEntry.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Load SDN List\OLE DST SdnEntry.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Load SDN List\OLE DST SdnEntry.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT Load SDN List.Paths[Flat File Source Output]" endId="Package\DFT Load SDN List\DER Normalize SDN.Inputs[Derived Column Input]" name="Flat File Source Output" startId="Package\DFT Load SDN List\FF Source SDN.Outputs[Flat File Source Output]" />
+            <path refId="Package\DFT Load SDN List.Paths[Derived Column Output]" endId="Package\DFT Load SDN List\OLE DST SdnEntry.Inputs[OLE DB Destination Input]" name="Derived Column Output" startId="Package\DFT Load SDN List\DER Normalize SDN.Outputs[Derived Column Output]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\DFT Screen Customers" DTS:CreationName="Microsoft.Pipeline" DTS:Description="Data Flow Task" DTS:DTSID="{1E8E42CD-7C0A-535D-95E8-17311BFAA945}" DTS:ExecutableType="Microsoft.Pipeline" DTS:LocaleID="-1" DTS:ObjectName="DFT Screen Customers" DTS:TaskContact="Performs high-performance data extraction, transformation and loading;Microsoft Corporation; Microsoft SQL Server; (C) Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT Screen Customers\OLE SRC Active Customers" componentClassID="Microsoft.OLEDBSource" description="OLE DB Source" name="OLE SRC Active Customers" version="7" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset" />
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">SELECT CustomerNumber, FirstName, LastName, CountryOfResidence, DateOfBirth FROM crm.Customer WHERE Status = 'ACTIVE'</property>
+                <property dataType="System.String" name="SqlCommandVariable" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">2</property>
+                <property dataType="System.String" name="ParameterMapping" />
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Screen Customers\OLE SRC Active Customers.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[CRM]" connectionManagerRefId="Package.ConnectionManagers[CRM]" name="OleDbConnection" />
+              </connections>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" dataType="wstr" length="20" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[CustomerNumber]" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" name="CustomerNumber" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[FirstName]" dataType="wstr" length="50" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[FirstName]" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[FirstName]" name="FirstName" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[LastName]" dataType="wstr" length="80" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[LastName]" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[LastName]" name="LastName" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]" dataType="wstr" length="2" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[CountryOfResidence]" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]" name="CountryOfResidence" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]" dataType="dbDate" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[DateOfBirth]" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]" name="DateOfBirth" />
+                  </outputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[CustomerNumber]" dataType="wstr" length="20" name="CustomerNumber" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[FirstName]" dataType="wstr" length="50" name="FirstName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[LastName]" dataType="wstr" length="80" name="LastName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[CountryOfResidence]" dataType="wstr" length="2" name="CountryOfResidence" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].ExternalColumns[DateOfBirth]" dataType="dbDate" name="DateOfBirth" />
+                  </externalMetadataColumns>
+                </output>
+                <output refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Error Output]" isErrorOut="true" name="OLE DB Source Error Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\DER Normalize Customer" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Normalize Customer" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Screen Customers\DER Normalize Customer.Inputs[Derived Column Input]" name="Derived Column Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Screen Customers\DER Normalize Customer.Inputs[Derived Column Input].Columns[LastName]" cachedDataType="wstr" cachedLength="80" cachedName="LastName" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[LastName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\DER Normalize Customer.Inputs[Derived Column Input].Columns[FirstName]" cachedDataType="wstr" cachedLength="50" cachedName="FirstName" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[FirstName]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\DFT Screen Customers\DER Normalize Customer.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Output].Columns[NormalizedName]" dataType="wstr" length="350" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Output].Columns[NormalizedName]" name="NormalizedName">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">UPPER(TRIM(#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[LastName]}) + " " + TRIM(#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[FirstName]}))</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">UPPER(TRIM([LastName]) + " " + TRIM([FirstName]))</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\DFT Screen Customers\DER Normalize Customer.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\FZL SDN Match" componentClassID="Microsoft.BestMatch" description="Fuzzy Lookup" name="FZL SDN Match" version="1">
+              <properties>
+                <property dataType="System.String" name="ReferenceTableName">[cmp].[SdnEntry]</property>
+                <property dataType="System.Int32" typeConverter="MatchIndexOptions" name="MatchIndexOptions">1</property>
+                <property dataType="System.String" name="MatchIndexName">cmp.SdnEntry_FuzzyIndex</property>
+                <property dataType="System.Double" name="MinSimilarity">0.8</property>
+                <property dataType="System.Int32" name="MaxOutputMatchesPerInput">3</property>
+                <property dataType="System.Boolean" name="Exhaustive">false</property>
+                <property dataType="System.Boolean" name="WarmCaches">true</property>
+                <property dataType="System.String" name="Delimiters"> ,.;:-"'&amp;/\@!?()&lt;&gt;[]{}|#*^%</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Screen Customers\FZL SDN Match.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Compliance]" connectionManagerRefId="Package.ConnectionManagers[Compliance]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input]" name="Fuzzy Lookup Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input].Columns[NormalizedName]" cachedDataType="wstr" cachedLength="350" cachedName="NormalizedName" lineageId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Output].Columns[NormalizedName]">
+                      <properties>
+                        <property dataType="System.String" name="JoinToReferenceColumn">NormalizedName</property>
+                        <property dataType="System.Int32" name="JoinType">2</property>
+                        <property dataType="System.Double" name="MinSimilarity">0.8</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" />
+                    <inputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input].Columns[FirstName]" cachedDataType="wstr" cachedLength="50" cachedName="FirstName" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[FirstName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input].Columns[LastName]" cachedDataType="wstr" cachedLength="80" cachedName="LastName" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[LastName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]" />
+                    <inputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" lineageId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output]" name="Fuzzy Lookup Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CustomerNumber]" dataType="wstr" length="20" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CustomerNumber]" name="CustomerNumber">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SourceInputColumnLineageID">#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[FirstName]" dataType="wstr" length="50" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[FirstName]" name="FirstName">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SourceInputColumnLineageID">#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[FirstName]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[LastName]" dataType="wstr" length="80" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[LastName]" name="LastName">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SourceInputColumnLineageID">#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[LastName]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CountryOfResidence]" dataType="wstr" length="2" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CountryOfResidence]" name="CountryOfResidence">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SourceInputColumnLineageID">#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[DateOfBirth]" dataType="dbDate" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[DateOfBirth]" name="DateOfBirth">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SourceInputColumnLineageID">#{Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[NormalizedName]" dataType="wstr" length="350" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[NormalizedName]" name="NormalizedName">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SourceInputColumnLineageID">#{Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Output].Columns[NormalizedName]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnEntNum]" dataType="str" length="10" codePage="1252" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnEntNum]" name="SdnEntNum">
+                      <properties>
+                        <property dataType="System.String" name="CopyFromReferenceColumn">EntNum</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnName]" dataType="str" length="350" codePage="1252" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnName]" name="SdnName">
+                      <properties>
+                        <property dataType="System.String" name="CopyFromReferenceColumn">SdnName</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnProgram]" dataType="str" length="200" codePage="1252" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnProgram]" name="SdnProgram">
+                      <properties>
+                        <property dataType="System.String" name="CopyFromReferenceColumn">Program</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]" dataType="r4" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]" name="_Similarity">
+                      <properties>
+                        <property dataType="System.Int32" name="ColumnType">1</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Confidence]" dataType="r4" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Confidence]" name="_Confidence">
+                      <properties>
+                        <property dataType="System.Int32" name="ColumnType">2</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity_NormalizedName]" dataType="r4" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity_NormalizedName]" name="_Similarity_NormalizedName">
+                      <properties>
+                        <property dataType="System.Int32" name="ColumnType">3</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\CSPL Match Strength" componentClassID="Microsoft.ConditionalSplit" description="Conditional Split" name="CSPL Match Strength" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input]" name="Conditional Split Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input].Columns[_Similarity]" cachedDataType="r4" cachedName="_Similarity" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]" />
+                    <inputColumn refId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input].Columns[_Confidence]" cachedDataType="r4" cachedName="_Confidence" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Confidence]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Strong Match]" exclusionGroup="1" name="Strong Match" synchronousInputId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input]">
+                  <properties>
+                    <property dataType="System.Int32" name="EvaluationOrder">0</property>
+                    <property dataType="System.String" expressionType="Notify" name="FriendlyExpression">[_Similarity] &gt;= 0.92 &amp;&amp; [_Confidence] &gt;= 0.5</property>
+                    <property dataType="System.String" containsID="true" name="Expression">#{Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]} &gt;= 0.92 &amp;&amp; #{Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Confidence]} &gt;= 0.5</property>
+                    <property dataType="System.Boolean" name="IsDefaultOut">false</property>
+                  </properties>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Possible Match]" exclusionGroup="1" name="Possible Match" synchronousInputId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input]">
+                  <properties>
+                    <property dataType="System.Int32" name="EvaluationOrder">1</property>
+                    <property dataType="System.String" expressionType="Notify" name="FriendlyExpression">[_Similarity] &gt;= (DT_R4)@[$Package::MinSimilarity]</property>
+                    <property dataType="System.String" containsID="true" name="Expression">#{Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]} &gt;= (DT_R4)@[$Package::MinSimilarity]</property>
+                    <property dataType="System.Boolean" name="IsDefaultOut">false</property>
+                  </properties>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[No Match]" exclusionGroup="1" name="No Match" synchronousInputId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input]">
+                  <properties>
+                    <property dataType="System.Boolean" name="IsDefaultOut">true</property>
+                  </properties>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Conditional Split Error Output]" isErrorOut="true" name="Conditional Split Error Output" synchronousInputId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Conditional Split Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Conditional Split Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Conditional Split Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Conditional Split Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\DER Alert Attributes" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Alert Attributes" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Screen Customers\DER Alert Attributes.Inputs[Derived Column Input]" name="Derived Column Input">
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\DFT Screen Customers\DER Alert Attributes.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output].Columns[BatchId]" dataType="i8" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output].Columns[BatchId]" name="BatchId">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">@[User::BatchId]</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">@[User::BatchId]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output].Columns[AlertStatus]" dataType="wstr" length="10" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output].Columns[AlertStatus]" name="AlertStatus">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">"OPEN"</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">"OPEN"</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\DFT Screen Customers\DER Alert Attributes.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\RC Alerts" componentClassID="Microsoft.RowCount" description="Row Count" name="RC Alerts" version="0">
+              <properties>
+                <property dataType="System.String" name="VariableName">User::AlertCount</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Screen Customers\RC Alerts.Inputs[Row Count Input 1]" name="Row Count Input 1">
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\RC Alerts.Outputs[Row Count Output 1]" name="Row Count Output 1" synchronousInputId="Package\DFT Screen Customers\RC Alerts.Inputs[Row Count Input 1]">
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\OLE DST SanctionsAlert" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST SanctionsAlert" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[cmp].[SanctionsAlert]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Compliance]" connectionManagerRefId="Package.ConnectionManagers[Compliance]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[CustomerNumber]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CustomerNumber]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[FirstName]" cachedDataType="wstr" cachedLength="50" cachedName="FirstName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[FirstName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[FirstName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[LastName]" cachedDataType="wstr" cachedLength="80" cachedName="LastName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[LastName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[LastName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[CountryOfResidence]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CountryOfResidence]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[DateOfBirth]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[DateOfBirth]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[NormalizedName]" cachedDataType="wstr" cachedLength="350" cachedName="NormalizedName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[NormalizedName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[NormalizedName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[SdnEntNum]" cachedDataType="str" cachedLength="10" cachedCodepage="1252" cachedName="SdnEntNum" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[SdnEntNum]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnEntNum]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[SdnName]" cachedDataType="str" cachedLength="350" cachedCodepage="1252" cachedName="SdnName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[SdnName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[SdnProgram]" cachedDataType="str" cachedLength="200" cachedCodepage="1252" cachedName="SdnProgram" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[SdnProgram]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnProgram]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[_Similarity]" cachedDataType="r4" cachedName="_Similarity" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[_Confidence]" cachedDataType="r4" cachedName="_Confidence" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[_Confidence]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Confidence]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[_Similarity_NormalizedName]" cachedDataType="r4" cachedName="_Similarity_NormalizedName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity_NormalizedName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity_NormalizedName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[BatchId]" cachedDataType="i8" cachedName="BatchId" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[BatchId]" lineageId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output].Columns[BatchId]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].Columns[AlertStatus]" cachedDataType="wstr" cachedLength="10" cachedName="AlertStatus" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[AlertStatus]" lineageId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output].Columns[AlertStatus]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[CustomerNumber]" dataType="wstr" length="20" name="CustomerNumber" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[FirstName]" dataType="wstr" length="50" name="FirstName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[LastName]" dataType="wstr" length="80" name="LastName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[CountryOfResidence]" dataType="wstr" length="2" name="CountryOfResidence" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[DateOfBirth]" dataType="dbDate" name="DateOfBirth" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[NormalizedName]" dataType="wstr" length="350" name="NormalizedName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[SdnEntNum]" dataType="str" length="10" codePage="1252" name="SdnEntNum" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[SdnName]" dataType="str" length="350" codePage="1252" name="SdnName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[SdnProgram]" dataType="str" length="200" codePage="1252" name="SdnProgram" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity]" dataType="r4" name="_Similarity" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[_Confidence]" dataType="r4" name="_Confidence" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity_NormalizedName]" dataType="r4" name="_Similarity_NormalizedName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[BatchId]" dataType="i8" name="BatchId" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input].ExternalColumns[AlertStatus]" dataType="wstr" length="10" name="AlertStatus" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\DER Review Attributes" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Review Attributes" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Screen Customers\DER Review Attributes.Inputs[Derived Column Input]" name="Derived Column Input">
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\DFT Screen Customers\DER Review Attributes.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Output].Columns[BatchId]" dataType="i8" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Output].Columns[BatchId]" name="BatchId">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">@[User::BatchId]</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">@[User::BatchId]</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\DFT Screen Customers\DER Review Attributes.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST SanctionsReviewQueue" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[cmp].[SanctionsReviewQueue]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Compliance]" connectionManagerRefId="Package.ConnectionManagers[Compliance]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[CustomerNumber]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CustomerNumber]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[FirstName]" cachedDataType="wstr" cachedLength="50" cachedName="FirstName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[FirstName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[FirstName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[LastName]" cachedDataType="wstr" cachedLength="80" cachedName="LastName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[LastName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[LastName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[CountryOfResidence]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[CountryOfResidence]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[DateOfBirth]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[DateOfBirth]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[NormalizedName]" cachedDataType="wstr" cachedLength="350" cachedName="NormalizedName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[NormalizedName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[NormalizedName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[SdnEntNum]" cachedDataType="str" cachedLength="10" cachedCodepage="1252" cachedName="SdnEntNum" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[SdnEntNum]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnEntNum]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[SdnName]" cachedDataType="str" cachedLength="350" cachedCodepage="1252" cachedName="SdnName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[SdnName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[SdnProgram]" cachedDataType="str" cachedLength="200" cachedCodepage="1252" cachedName="SdnProgram" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[SdnProgram]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[SdnProgram]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[_Similarity]" cachedDataType="r4" cachedName="_Similarity" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[_Confidence]" cachedDataType="r4" cachedName="_Confidence" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[_Confidence]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Confidence]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[_Similarity_NormalizedName]" cachedDataType="r4" cachedName="_Similarity_NormalizedName" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity_NormalizedName]" lineageId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output].Columns[_Similarity_NormalizedName]" />
+                    <inputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].Columns[BatchId]" cachedDataType="i8" cachedName="BatchId" externalMetadataColumnId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[BatchId]" lineageId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Output].Columns[BatchId]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[CustomerNumber]" dataType="wstr" length="20" name="CustomerNumber" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[FirstName]" dataType="wstr" length="50" name="FirstName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[LastName]" dataType="wstr" length="80" name="LastName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[CountryOfResidence]" dataType="wstr" length="2" name="CountryOfResidence" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[DateOfBirth]" dataType="dbDate" name="DateOfBirth" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[NormalizedName]" dataType="wstr" length="350" name="NormalizedName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[SdnEntNum]" dataType="str" length="10" codePage="1252" name="SdnEntNum" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[SdnName]" dataType="str" length="350" codePage="1252" name="SdnName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[SdnProgram]" dataType="str" length="200" codePage="1252" name="SdnProgram" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity]" dataType="r4" name="_Similarity" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[_Confidence]" dataType="r4" name="_Confidence" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[_Similarity_NormalizedName]" dataType="r4" name="_Similarity_NormalizedName" />
+                    <externalMetadataColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input].ExternalColumns[BatchId]" dataType="i8" name="BatchId" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT Screen Customers.Paths[OLE DB Source Output]" endId="Package\DFT Screen Customers\DER Normalize Customer.Inputs[Derived Column Input]" name="OLE DB Source Output" startId="Package\DFT Screen Customers\OLE SRC Active Customers.Outputs[OLE DB Source Output]" />
+            <path refId="Package\DFT Screen Customers.Paths[Derived Column Output]" endId="Package\DFT Screen Customers\FZL SDN Match.Inputs[Fuzzy Lookup Input]" name="Derived Column Output" startId="Package\DFT Screen Customers\DER Normalize Customer.Outputs[Derived Column Output]" />
+            <path refId="Package\DFT Screen Customers.Paths[Fuzzy Lookup Output]" endId="Package\DFT Screen Customers\CSPL Match Strength.Inputs[Conditional Split Input]" name="Fuzzy Lookup Output" startId="Package\DFT Screen Customers\FZL SDN Match.Outputs[Fuzzy Lookup Output]" />
+            <path refId="Package\DFT Screen Customers.Paths[Strong Match]" endId="Package\DFT Screen Customers\DER Alert Attributes.Inputs[Derived Column Input]" name="Strong Match" startId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Strong Match]" />
+            <path refId="Package\DFT Screen Customers.Paths[Derived Column Output 1]" endId="Package\DFT Screen Customers\RC Alerts.Inputs[Row Count Input 1]" name="Derived Column Output 1" startId="Package\DFT Screen Customers\DER Alert Attributes.Outputs[Derived Column Output]" />
+            <path refId="Package\DFT Screen Customers.Paths[Row Count Output 1]" endId="Package\DFT Screen Customers\OLE DST SanctionsAlert.Inputs[OLE DB Destination Input]" name="Row Count Output 1" startId="Package\DFT Screen Customers\RC Alerts.Outputs[Row Count Output 1]" />
+            <path refId="Package\DFT Screen Customers.Paths[Possible Match]" endId="Package\DFT Screen Customers\DER Review Attributes.Inputs[Derived Column Input]" name="Possible Match" startId="Package\DFT Screen Customers\CSPL Match Strength.Outputs[Possible Match]" />
+            <path refId="Package\DFT Screen Customers.Paths[Derived Column Output 2]" endId="Package\DFT Screen Customers\OLE DST SanctionsReviewQueue.Inputs[OLE DB Destination Input]" name="Derived Column Output 2" startId="Package\DFT Screen Customers\DER Review Attributes.Outputs[Derived Column Output]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\MAIL Sanctions Alert" DTS:CreationName="Microsoft.SendMailTask" DTS:Description="Send Mail Task" DTS:DTSID="{B0587B48-064E-5119-B49A-060E295A5775}" DTS:ExecutableType="Microsoft.SendMailTask" DTS:LocaleID="-1" DTS:ObjectName="MAIL Sanctions Alert" DTS:TaskContact="Send Mail Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:PropertyExpression DTS:Name="Subject">"[OFAC] " + (DT_WSTR,10)@[User::AlertCount] + " strong potential matches"</DTS:PropertyExpression>
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SendMailTask:SendMailTaskData SendMailTask:SMTPServer="{C0F70DA2-1E46-50D2-B7D7-650E32927996}" SendMailTask:From="sanctions@contoso.example" SendMailTask:To="sanctions-team@contoso.example" SendMailTask:Subject="OFAC potential matches" SendMailTask:Priority="High" SendMailTask:MessageSource="Strong potential OFAC SDN matches were found. Review cmp.SanctionsAlert immediately." />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Complete Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Close batch with status Succeeded" DTS:DTSID="{93AD8B06-550A-5A7E-AA8C-64BBF941087D}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Complete Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{ED70B637-671B-5548-BC0F-15C628435E7E}" SQLTask:SqlStatementSource="EXEC etl.usp_EndBatch @BatchId = ?, @Status = 'Succeeded', @RowsExtracted = ?, @RowsLoaded = ?, @RowsRejected = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::RowsExtracted" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="User::RowsLoaded" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::RowsRejected" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{7DFADDF1-3C0D-56D0-B60D-512EDAA7976A}" DTS:From="Package\SQL Start Batch" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\SCR Download SDN List" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 1]" DTS:CreationName="" DTS:DTSID="{D97A5529-170F-5A3E-9ECB-FF36699D93E0}" DTS:From="Package\SCR Download SDN List" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 1" DTS:To="Package\SQL Truncate SDN" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 2]" DTS:CreationName="" DTS:DTSID="{3793BC6C-BAB1-5242-8C5A-E2C924207A44}" DTS:From="Package\SQL Truncate SDN" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 2" DTS:To="Package\DFT Load SDN List" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 3]" DTS:CreationName="" DTS:DTSID="{C5B31295-868B-5E75-AEEA-33C93D07DEF8}" DTS:From="Package\DFT Load SDN List" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 3" DTS:To="Package\DFT Screen Customers" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 4]" DTS:CreationName="" DTS:DTSID="{59B7A169-9C05-5BCC-A951-B752D7BC65DE}" DTS:EvalOp="3" DTS:Expression="@[User::AlertCount] &gt; 0" DTS:From="Package\DFT Screen Customers" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 4" DTS:To="Package\MAIL Sanctions Alert" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 5]" DTS:CreationName="" DTS:DTSID="{CC860B1C-F619-548B-8A19-B7EAB4023233}" DTS:From="Package\DFT Screen Customers" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 5" DTS:To="Package\SQL Complete Batch" />
+  </DTS:PrecedenceConstraints>
+  <DTS:EventHandlers>
+    <DTS:EventHandler DTS:refId="Package.EventHandlers[OnError]" DTS:CreationName="OnError" DTS:DTSID="{A4E24126-4630-5368-9465-423CC465D8FB}" DTS:EventID="0" DTS:EventName="OnError" DTS:LocaleID="-1">
+      <DTS:Variables>
+        <DTS:Variable DTS:CreationName="" DTS:Description="Specifies whether the event is propagated to higher level event handlers" DTS:DTSID="{4A8CED94-D244-593D-8AF3-D77AD8E3CB21}" DTS:IncludeInDebugDump="2345" DTS:Namespace="System" DTS:ObjectName="Propagate">
+          <DTS:VariableValue DTS:DataType="11">-1</DTS:VariableValue>
+        </DTS:Variable>
+      </DTS:Variables>
+      <DTS:Executables>
+        <DTS:Executable DTS:refId="Package.EventHandlers[OnError]\SQL Log Error" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Write failing task and error text to ETLControl.etl.ErrorLog" DTS:DTSID="{5F4C4B84-CF0D-590E-A523-CF7E485FE7CE}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Log Error" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData SQLTask:Connection="{ED70B637-671B-5548-BC0F-15C628435E7E}" SQLTask:SqlStatementSource="INSERT INTO etl.ErrorLog (BatchId, PackageName, SourceName, ErrorCode, ErrorDescription, LoggedAtUtc) VALUES (?, ?, ?, ?, ?, SYSUTCDATETIME());">
+              <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+              <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+              <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="System::SourceName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+              <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="System::ErrorCode" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+              <SQLTask:ParameterBinding SQLTask:ParameterName="4" SQLTask:DtsVariableName="System::ErrorDescription" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+            </SQLTask:SqlTaskData>
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+    </DTS:EventHandler>
+  </DTS:EventHandlers>
+</DTS:Executable>

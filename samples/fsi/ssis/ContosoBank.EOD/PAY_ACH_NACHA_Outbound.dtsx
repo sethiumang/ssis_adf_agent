@@ -1,0 +1,417 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" xmlns:SendMailTask="www.microsoft.com/sqlserver/dts/tasks/sendmailtask" xmlns:xsd="http://www.w3.org/2001/XMLSchema" DTS:refId="Package" DTS:CreationDate="1/15/2026 9:00:00 AM" DTS:CreationName="Microsoft.Package" DTS:CreatorComputerName="CONTOSO-ETLDEV01" DTS:CreatorName="CONTOSO\svc_ssis_dev" DTS:Description="Builds NACHA-formatted ACH origination files per company batch, PGP-encrypts them and transmits via SFTP to the ACH operator, then marks batches as transmitted." DTS:DTSID="{28389BE1-E6B4-5DE2-8A8E-96F3164FCD41}" DTS:ExecutableType="Microsoft.Package" DTS:LastModifiedProductVersion="15.0.2000.180" DTS:LocaleID="1033" DTS:ObjectName="PAY_ACH_NACHA_Outbound" DTS:PackageType="5" DTS:ProtectionLevel="1" DTS:VersionBuild="12" DTS:VersionGUID="{18183127-9FB9-5F38-AEFC-CC1C9553C749}">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[CoreBanking]" DTS:CreationName="OLEDB" DTS:DTSID="{AF92A38D-F82E-584A-A9F9-C8B8971605D9}" DTS:ObjectName="CoreBanking">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::CoreBankingConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=CORESQL01.contoso.local;Initial Catalog=CoreBanking;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-PAY_ACH_NACHA_Outbound-CoreBanking;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ETLControl]" DTS:CreationName="OLEDB" DTS:DTSID="{4797D317-5BEF-5203-94D3-1B3A93A3252C}" DTS:ObjectName="ETLControl">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::ETLControlConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=ETLSQL01.contoso.local;Initial Catalog=ETLControl;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-PAY_ACH_NACHA_Outbound-ETLControl;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[SMTP_Contoso]" DTS:CreationName="SMTP" DTS:DTSID="{7DC20934-DC78-52E0-8D6B-5B3CD180E150}" DTS:ObjectName="SMTP_Contoso">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="SmtpServer=smtp.contoso.local;UseWindowsAuthentication=True;EnableSsl=True;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[FF_NachaOut]" DTS:CreationName="FLATFILE" DTS:DTSID="{90C2DC90-992E-590E-863E-78131636BA12}" DTS:ObjectName="FF_NachaOut">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[User::NachaFile]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:Format="Delimited" DTS:LocaleID="1033" DTS:Unicode="False" DTS:HeaderRowDelimiter="_x000D__x000A_" DTS:ColumnNamesInFirstDataRow="False" DTS:RowDelimiter="" DTS:CodePage="1252" DTS:ConnectionString="\\fileshare01.contoso.local\etl\outbound\ach\ACH.txt">
+          <DTS:FlatFileColumns>
+            <DTS:FlatFileColumn DTS:ColumnType="Delimited" DTS:ColumnDelimiter="_x000D__x000A_" DTS:MaximumWidth="94" DTS:DataType="129" DTS:TextQualified="False" DTS:ObjectName="NachaRecord" DTS:DTSID="{5E104DE7-D786-533B-BEB0-D6DAEC31B515}" DTS:CreationName="" />
+          </DTS:FlatFileColumns>
+        </DTS:ConnectionManager>
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:Variables>
+    <DTS:Variable DTS:CreationName="" DTS:Description="ETLControl batch id" DTS:DTSID="{9D925B97-A795-5C1C-9BC5-9AB4A599C2B3}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="BatchId">
+      <DTS:VariableValue DTS:DataType="20">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{9B735D17-78BF-5CF0-87F0-18345EB90C7F}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsExtracted">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{65590AF8-53E3-5BC8-96DE-DF8509285EAC}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsLoaded">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{E1E826F5-DD3A-5421-AD96-01DC062D9A0B}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsRejected">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:Description="ADO recordset of pending ACH batches" DTS:DTSID="{AC456924-0241-5530-9630-D43FFBE9D30C}" DTS:IncludeInDebugDump="6789" DTS:Namespace="User" DTS:ObjectName="PendingBatches">
+      <DTS:VariableValue DTS:DataSubType="ManagedSerializable" DTS:DataType="13">
+        <SOAP-ENV:Envelope SOAP-ENV:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
+          <SOAP-ENV:Body>
+            <xsd:anyType id="ref-1" />
+          </SOAP-ENV:Body>
+        </SOAP-ENV:Envelope>
+      </DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{83223CCC-E63D-527B-9BAD-5FABF2FFA000}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="CurrentAchBatchId">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{D8DE6B21-E6FD-5DA1-99C9-38CBA74C36B6}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="CurrentCompanyId">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{1650B852-3E98-5D0C-8FEF-90848BE4E862}" DTS:EvaluateAsExpression="True" DTS:Expression="@[$Project::OutboundRoot] + &quot;\\ach\\ACH_&quot; + @[User::CurrentCompanyId] + &quot;_&quot; + (DT_WSTR,10)@[User::CurrentAchBatchId] + &quot;.txt&quot;" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="NachaFile">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{936E1038-79B7-50BD-A530-5A87BE5DB72B}" DTS:EvaluateAsExpression="True" DTS:Expression="@[User::NachaFile] + &quot;.pgp&quot;" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="EncryptedFile">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{70FEC51D-7CE2-5D0B-89E7-7E35B80D2A29}" DTS:EvaluateAsExpression="True" DTS:Expression="@[$Project::OutboundRoot] + &quot;\\ach\\winscp_&quot; + (DT_WSTR,10)@[User::CurrentAchBatchId] + &quot;.txt&quot;" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="WinScpScriptPath">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{D670B0F2-C157-5821-AB30-A9C08493439F}" DTS:EvaluateAsExpression="True" DTS:Expression="@[$Project::ArchiveRoot] + &quot;\\ach\\sent\\&quot;" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="SentFolder">
+      <DTS:VariableValue DTS:DataType="8" />
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Start Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Register ACH NACHA outbound run in ETLControl.etl.Batch" DTS:DTSID="{2D152BB5-E763-5405-9F68-DD12B811C660}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Start Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{4797D317-5BEF-5203-94D3-1B3A93A3252C}" SQLTask:SqlStatementSource="EXEC etl.usp_StartBatch @ProcessName = ?, @PackageName = ?, @ExecutionId = ?, @BatchId = ? OUTPUT;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="System::ServerExecutionID" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Output" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Get Pending ACH Batches" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{34676E3F-0547-50E4-A6D9-662A33417F84}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Get Pending ACH Batches" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{AF92A38D-F82E-584A-A9F9-C8B8971605D9}" SQLTask:SqlStatementSource="SELECT AchBatchId, CompanyId FROM pay.AchBatch WHERE Status = 'APPROVED' AND EffectiveEntryDate &lt;= DATEADD(day, 1, CAST(GETDATE() AS date)) ORDER BY AchBatchId;" SQLTask:ResultType="ResultSetType_Rowset">
+          <SQLTask:ResultBinding SQLTask:ResultName="0" SQLTask:DtsVariableName="User::PendingBatches" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\FELC Each ACH Batch" DTS:CreationName="STOCK:FOREACHLOOP" DTS:Description="Foreach Loop Container" DTS:DTSID="{31C5AE3B-D364-599D-8D4C-E0056CB3BDF7}" DTS:ExecutableType="STOCK:FOREACHLOOP" DTS:LocaleID="-1" DTS:ObjectName="FELC Each ACH Batch">
+      <DTS:ForEachEnumerator DTS:refId="Package\FELC Each ACH Batch\{F8C460C7-2516-58CB-83AD-F344240B7716}" DTS:CreationName="Microsoft.ForEachADOEnumerator" DTS:DTSID="{71CFA6B1-E793-5378-BFB7-351B59F8F09C}" DTS:ObjectName="{F8C460C7-2516-58CB-83AD-F344240B7716}">
+        <DTS:ObjectData>
+          <FEEADO EnumType="EnumerateRowsInFirstTable" VarName="User::PendingBatches" />
+        </DTS:ObjectData>
+      </DTS:ForEachEnumerator>
+      <DTS:Variables />
+      <DTS:Executables>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\DFT Build NACHA File" DTS:CreationName="Microsoft.Pipeline" DTS:Description="Data Flow Task" DTS:DTSID="{A83DA9DA-DA75-510A-9954-313F52B3E456}" DTS:ExecutableType="Microsoft.Pipeline" DTS:LocaleID="-1" DTS:ObjectName="DFT Build NACHA File" DTS:TaskContact="Performs high-performance data extraction, transformation and loading;Microsoft Corporation; Microsoft SQL Server; (C) Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <pipeline version="1">
+              <components>
+                <component refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records" componentClassID="Microsoft.OLEDBSource" description="OLE DB Source" name="OLE SRC ACH Records" version="7" usesDispositions="true">
+                  <properties>
+                    <property dataType="System.Int32" name="CommandTimeout">0</property>
+                    <property dataType="System.String" name="OpenRowset" />
+                    <property dataType="System.String" name="OpenRowsetVariable" />
+                    <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">EXEC pay.usp_GetAchFileRecords @AchBatchId = ?</property>
+                    <property dataType="System.String" name="SqlCommandVariable" />
+                    <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                    <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                    <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">2</property>
+                    <property dataType="System.String" name="ParameterMapping">"Parameter0:Input",{83223CCC-E63D-527B-9BAD-5FABF2FFA000};</property>
+                  </properties>
+                  <connections>
+                    <connection refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[CoreBanking]" connectionManagerRefId="Package.ConnectionManagers[CoreBanking]" name="OleDbConnection" />
+                  </connections>
+                  <outputs>
+                    <output refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                      <outputColumns>
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RecordSeq]" dataType="i4" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[RecordSeq]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RecordSeq]" name="RecordSeq" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RecordTypeCode]" dataType="wstr" length="1" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[RecordTypeCode]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RecordTypeCode]" name="RecordTypeCode" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[TransactionCode]" dataType="wstr" length="2" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[TransactionCode]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[TransactionCode]" name="TransactionCode" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RoutingNumber]" dataType="wstr" length="9" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[RoutingNumber]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RoutingNumber]" name="RoutingNumber" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[AccountNumber]" dataType="wstr" length="17" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[AccountNumber]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[AccountNumber]" name="AccountNumber" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[AmountCents]" dataType="i8" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[AmountCents]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[AmountCents]" name="AmountCents" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[IndividualId]" dataType="wstr" length="15" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[IndividualId]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[IndividualId]" name="IndividualId" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[IndividualName]" dataType="wstr" length="22" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[IndividualName]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[IndividualName]" name="IndividualName" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[TraceNumber]" dataType="wstr" length="15" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[TraceNumber]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[TraceNumber]" name="TraceNumber" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[PrebuiltRecord]" dataType="wstr" length="94" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[PrebuiltRecord]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[PrebuiltRecord]" name="PrebuiltRecord" />
+                      </outputColumns>
+                      <externalMetadataColumns isUsed="True">
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[RecordSeq]" dataType="i4" name="RecordSeq" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[RecordTypeCode]" dataType="wstr" length="1" name="RecordTypeCode" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[TransactionCode]" dataType="wstr" length="2" name="TransactionCode" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[RoutingNumber]" dataType="wstr" length="9" name="RoutingNumber" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[AccountNumber]" dataType="wstr" length="17" name="AccountNumber" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[AmountCents]" dataType="i8" name="AmountCents" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[IndividualId]" dataType="wstr" length="15" name="IndividualId" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[IndividualName]" dataType="wstr" length="22" name="IndividualName" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[TraceNumber]" dataType="wstr" length="15" name="TraceNumber" />
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].ExternalColumns[PrebuiltRecord]" dataType="wstr" length="94" name="PrebuiltRecord" />
+                      </externalMetadataColumns>
+                    </output>
+                    <output refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Error Output]" isErrorOut="true" name="OLE DB Source Error Output">
+                      <outputColumns>
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records" componentClassID="Microsoft.ManagedComponentHost" description="Script Component" name="SC Format NACHA Records" version="10">
+                  <properties>
+                    <property dataType="System.String" name="SourceCode" isArray="true">
+                      <arrayElements arrayElementCount="4">
+                        <arrayElement dataType="System.String">\main.cs</arrayElement>
+                        <arrayElement dataType="System.String">using System;
+using Microsoft.SqlServer.Dts.Pipeline.Wrapper;
+using Microsoft.SqlServer.Dts.Runtime.Wrapper;
+
+[Microsoft.SqlServer.Dts.Pipeline.SSISScriptComponentEntryPointAttribute]
+public class ScriptMain : UserComponent
+{
+    // Formats ACH entries into fixed-width 94-character NACHA records:
+    // 1 File Header, 5 Batch Header, 6 Entry Detail, 8 Batch Control, 9 File Control (+ 9999 padding).
+    private long _entryHash;
+    private long _totalDebit;
+    private long _totalCredit;
+    private int _entryCount;
+
+    public override void Input0_ProcessInputRow(Input0Buffer Row)
+    {
+        string record;
+        switch (Row.RecordTypeCode)
+        {
+            case "6":
+                record = "6"
+                    + Row.TransactionCode.PadLeft(2, '0')
+                    + Row.RoutingNumber.Substring(0, 8)
+                    + Row.RoutingNumber.Substring(8, 1)
+                    + Row.AccountNumber.PadRight(17)
+                    + Row.AmountCents.ToString().PadLeft(10, '0')
+                    + Row.IndividualId.PadRight(15)
+                    + Row.IndividualName.PadRight(22).Substring(0, 22)
+                    + "  "
+                    + "0"
+                    + Row.TraceNumber.PadLeft(15, '0');
+                _entryHash += long.Parse(Row.RoutingNumber.Substring(0, 8));
+                _entryCount++;
+                if (Row.TransactionCode == "27" || Row.TransactionCode == "37") _totalDebit += Row.AmountCents;
+                else _totalCredit += Row.AmountCents;
+                break;
+            default:
+                record = Row.PrebuiltRecord;
+                break;
+        }
+
+        if (record.Length != 94)
+        {
+            bool cancel;
+            ComponentMetaData.FireError(0, "NACHA", "Record length " + record.Length + " for trace " + Row.TraceNumber, "", 0, out cancel);
+        }
+        Output0Buffer.AddRow();
+        Output0Buffer.NachaRecord = record;
+    }
+}
+</arrayElement>
+                        <arrayElement dataType="System.String">\SC_Component.csproj</arrayElement>
+                        <arrayElement dataType="System.String">&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003"&gt;
+  &lt;PropertyGroup&gt;&lt;AssemblyName&gt;SC_NachaFormatter&lt;/AssemblyName&gt;&lt;RootNamespace&gt;SC_NachaFormatter&lt;/RootNamespace&gt;&lt;TargetFrameworkVersion&gt;v4.7&lt;/TargetFrameworkVersion&gt;&lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;&lt;Compile Include="ScriptMain.cs" /&gt;&lt;/ItemGroup&gt;
+&lt;/Project&gt;
+</arrayElement>
+                      </arrayElements>
+                    </property>
+                    <property dataType="System.String" name="BinaryCode" isArray="true">
+                      <arrayElements arrayElementCount="0" />
+                    </property>
+                    <property dataType="System.String" name="VSTAProjectName">SC_NachaFormatter</property>
+                    <property dataType="System.String" typeConverter="ScriptLanguage" name="ScriptLanguage">CSharp</property>
+                    <property dataType="System.String" name="ReadOnlyVariables" />
+                    <property dataType="System.String" name="ReadWriteVariables" />
+                    <property dataType="System.String" name="BreakpointCollection" />
+                    <property dataType="System.String" name="UserComponentTypeName">Microsoft.ScriptComponentHost</property>
+                  </properties>
+                  <inputs>
+                    <input refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0]" name="Input 0">
+                      <inputColumns>
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[RecordSeq]" cachedDataType="i4" cachedName="RecordSeq" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RecordSeq]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[RecordTypeCode]" cachedDataType="wstr" cachedLength="1" cachedName="RecordTypeCode" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RecordTypeCode]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[TransactionCode]" cachedDataType="wstr" cachedLength="2" cachedName="TransactionCode" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[TransactionCode]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[RoutingNumber]" cachedDataType="wstr" cachedLength="9" cachedName="RoutingNumber" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[RoutingNumber]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[AccountNumber]" cachedDataType="wstr" cachedLength="17" cachedName="AccountNumber" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[AccountNumber]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[AmountCents]" cachedDataType="i8" cachedName="AmountCents" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[AmountCents]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[IndividualId]" cachedDataType="wstr" cachedLength="15" cachedName="IndividualId" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[IndividualId]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[IndividualName]" cachedDataType="wstr" cachedLength="22" cachedName="IndividualName" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[IndividualName]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[TraceNumber]" cachedDataType="wstr" cachedLength="15" cachedName="TraceNumber" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[TraceNumber]" />
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0].Columns[PrebuiltRecord]" cachedDataType="wstr" cachedLength="94" cachedName="PrebuiltRecord" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output].Columns[PrebuiltRecord]" />
+                      </inputColumns>
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Outputs[Output 0]" name="Output 0">
+                      <properties>
+                        <property dataType="System.Int32" name="SynchronousInputID">0</property>
+                      </properties>
+                      <outputColumns>
+                        <outputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Outputs[Output 0].Columns[NachaRecord]" dataType="str" length="94" codePage="1252" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Outputs[Output 0].Columns[NachaRecord]" name="NachaRecord" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File" componentClassID="Microsoft.FlatFileDestination" description="Flat File Destination" name="FF DST NACHA File" version="1">
+                  <properties>
+                    <property dataType="System.Boolean" name="Overwrite">true</property>
+                    <property dataType="System.String" name="Header" />
+                  </properties>
+                  <connections>
+                    <connection refId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File.Connections[FlatFileConnection]" connectionManagerID="Package.ConnectionManagers[FF_NachaOut]" connectionManagerRefId="Package.ConnectionManagers[FF_NachaOut]" name="FlatFileConnection" />
+                  </connections>
+                  <inputs>
+                    <input refId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File.Inputs[Flat File Destination Input]" name="Flat File Destination Input" hasSideEffects="true">
+                      <inputColumns>
+                        <inputColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File.Inputs[Flat File Destination Input].Columns[NachaRecord]" cachedDataType="str" cachedLength="94" cachedCodepage="1252" cachedName="NachaRecord" externalMetadataColumnId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File.Inputs[Flat File Destination Input].ExternalColumns[NachaRecord]" lineageId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Outputs[Output 0].Columns[NachaRecord]" />
+                      </inputColumns>
+                      <externalMetadataColumns isUsed="True">
+                        <externalMetadataColumn refId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File.Inputs[Flat File Destination Input].ExternalColumns[NachaRecord]" dataType="str" length="94" codePage="1252" name="NachaRecord" />
+                      </externalMetadataColumns>
+                    </input>
+                  </inputs>
+                </component>
+              </components>
+              <paths>
+                <path refId="Package\FELC Each ACH Batch\DFT Build NACHA File.Paths[OLE DB Source Output]" endId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Inputs[Input 0]" name="OLE DB Source Output" startId="Package\FELC Each ACH Batch\DFT Build NACHA File\OLE SRC ACH Records.Outputs[OLE DB Source Output]" />
+                <path refId="Package\FELC Each ACH Batch\DFT Build NACHA File.Paths[Output 0]" endId="Package\FELC Each ACH Batch\DFT Build NACHA File\FF DST NACHA File.Inputs[Flat File Destination Input]" name="Output 0" startId="Package\FELC Each ACH Batch\DFT Build NACHA File\SC Format NACHA Records.Outputs[Output 0]" />
+              </paths>
+            </pipeline>
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\EPT PGP Encrypt" DTS:CreationName="Microsoft.ExecuteProcess" DTS:Description="Execute Process Task" DTS:DTSID="{CEB918FF-7818-5B8B-9B53-4437D0A1EE14}" DTS:ExecutableType="Microsoft.ExecuteProcess" DTS:LocaleID="-1" DTS:ObjectName="EPT PGP Encrypt" DTS:TaskContact="Execute Process Task;Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:PropertyExpression DTS:Name="Arguments">"--batch --yes --trust-model always -r " + @[$Project::PgpRecipient] + " -o \"" + @[User::EncryptedFile] + "\" -e \"" + @[User::NachaFile] + "\""</DTS:PropertyExpression>
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <ExecuteProcessData Executable="C:\Program Files (x86)\GnuPG\bin\gpg.exe" Arguments="--batch --yes" WorkingDirectory="C:\ETL\ach" SuccessValue="0" TimeOut="300" TerminateAfterTimeOut="True" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\SCR Write WinSCP Script" DTS:CreationName="Microsoft.ScriptTask" DTS:Description="Writes a WinSCP script using the sensitive SFTP password" DTS:DTSID="{F43681B6-7BD4-5E03-ABDD-C5874590B40F}" DTS:ExecutableType="Microsoft.ScriptTask" DTS:LocaleID="-1" DTS:ObjectName="SCR Write WinSCP Script" DTS:TaskContact="" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <ScriptProject Name="ST_f43681b67bd45e03abddc5874590b40f" VSTAMajorVersion="15" VSTAMinorVersion="0" Language="CSharp" ReadOnlyVariables="$Project::SftpHost,$Project::SftpUser,$Project::SftpPassword,User::EncryptedFile,User::WinScpScriptPath" ReadWriteVariables="">
+              <ProjectItem Name="ScriptMain.cs" Encoding="UTF8">#region Namespaces
+using System;
+using System.IO;
+using Microsoft.SqlServer.Dts.Runtime;
+#endregion
+
+namespace ST_WinScpScript
+{
+    [Microsoft.SqlServer.Dts.Tasks.ScriptTask.SSISScriptTaskEntryPointAttribute]
+    public partial class ScriptMain : Microsoft.SqlServer.Dts.Tasks.ScriptTask.VSTARTScriptObjectModelBase
+    {
+        // Writes a transient WinSCP script; the SFTP password is a sensitive project parameter
+        // and therefore cannot be bound directly to the Execute Process Arguments property.
+        public void Main()
+        {
+            string host = (string)Dts.Variables["$Project::SftpHost"].Value;
+            string user = (string)Dts.Variables["$Project::SftpUser"].Value;
+            string password = Dts.Variables["$Project::SftpPassword"].GetSensitiveValue().ToString();
+            string file = (string)Dts.Variables["User::EncryptedFile"].Value;
+            string scriptPath = (string)Dts.Variables["User::WinScpScriptPath"].Value;
+
+            File.WriteAllLines(scriptPath, new[]
+            {
+                "option batch abort",
+                "option confirm off",
+                "open sftp://" + Uri.EscapeDataString(user) + ":" + Uri.EscapeDataString(password) + "@" + host + "/ -hostkey=\"ssh-ed25519 255 FAKEHOSTKEYFINGERPRINT\"",
+                "cd /inbound/ach",
+                "put \"" + file + "\"",
+                "exit"
+            });
+            Dts.TaskResult = (int)ScriptResults.Success;
+        }
+
+        enum ScriptResults
+        {
+            Success = Microsoft.SqlServer.Dts.Runtime.DTSExecResult.Success,
+            Failure = Microsoft.SqlServer.Dts.Runtime.DTSExecResult.Failure
+        };
+    }
+}
+</ProjectItem>
+              <ProjectItem Name="ST_f43681b67bd45e03abddc5874590b40f.csproj" Encoding="UTF8">&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003"&gt;
+  &lt;PropertyGroup&gt;&lt;AssemblyName&gt;ST_f43681b67bd45e03abddc5874590b40f&lt;/AssemblyName&gt;&lt;RootNamespace&gt;ST_f43681b67bd45e03abddc5874590b40f&lt;/RootNamespace&gt;&lt;TargetFrameworkVersion&gt;v4.7&lt;/TargetFrameworkVersion&gt;&lt;/PropertyGroup&gt;
+  &lt;ItemGroup&gt;&lt;Compile Include="ScriptMain.cs" /&gt;&lt;/ItemGroup&gt;
+&lt;/Project&gt;
+</ProjectItem>
+            </ScriptProject>
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\EPT SFTP Upload" DTS:CreationName="Microsoft.ExecuteProcess" DTS:Description="Execute Process Task" DTS:DTSID="{32928511-8DA9-5441-B27A-E55595BAA8F0}" DTS:ExecutableType="Microsoft.ExecuteProcess" DTS:LocaleID="-1" DTS:ObjectName="EPT SFTP Upload" DTS:TaskContact="Execute Process Task;Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:PropertyExpression DTS:Name="Arguments">"/ini=nul /log=C:\\ETL\\ach\\winscp.log /script=\"" + @[User::WinScpScriptPath] + "\""</DTS:PropertyExpression>
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <ExecuteProcessData Executable="C:\Program Files (x86)\WinSCP\WinSCP.com" Arguments="/ini=nul" WorkingDirectory="C:\ETL\ach" SuccessValue="0" TimeOut="600" TerminateAfterTimeOut="True" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\FST Delete WinSCP Script" DTS:CreationName="Microsoft.FileSystemTask" DTS:Description="File System Task" DTS:DTSID="{806EF189-F979-53C3-A1F3-138364FD1D1D}" DTS:ExecutableType="Microsoft.FileSystemTask" DTS:LocaleID="-1" DTS:ObjectName="FST Delete WinSCP Script" DTS:TaskContact="File System Task;Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <FileSystemData TaskOperationType="DeleteFile" TaskSourcePath="User::WinScpScriptPath" TaskIsSourceVariable="True" TaskDestinationPath="" TaskIsDestinationVariable="False" TaskOverwriteDestFile="True" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\FST Archive Clear Text" DTS:CreationName="Microsoft.FileSystemTask" DTS:Description="File System Task" DTS:DTSID="{B470F4A2-616B-5074-8161-AD78EDBFBFFD}" DTS:ExecutableType="Microsoft.FileSystemTask" DTS:LocaleID="-1" DTS:ObjectName="FST Archive Clear Text" DTS:TaskContact="File System Task;Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <FileSystemData TaskOperationType="MoveFile" TaskSourcePath="User::NachaFile" TaskIsSourceVariable="True" TaskDestinationPath="User::SentFolder" TaskIsDestinationVariable="True" TaskOverwriteDestFile="True" />
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\SQL Mark Transmitted" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{9F6985AD-460B-55D4-AADF-CD8D60111726}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Mark Transmitted" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData SQLTask:Connection="{AF92A38D-F82E-584A-A9F9-C8B8971605D9}" SQLTask:SqlStatementSource="UPDATE pay.AchBatch SET Status = 'TRANSMITTED', TransmittedUtc = SYSUTCDATETIME(), FileName = ? WHERE AchBatchId = ?;">
+              <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::EncryptedFile" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+              <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::CurrentAchBatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+            </SQLTask:SqlTaskData>
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\FELC Each ACH Batch\MAIL ACH Transmission Failed" DTS:CreationName="Microsoft.SendMailTask" DTS:Description="Send Mail Task" DTS:DTSID="{C28D45F8-21B0-56C7-8BAB-99E1E61B3302}" DTS:ExecutableType="Microsoft.SendMailTask" DTS:LocaleID="-1" DTS:ObjectName="MAIL ACH Transmission Failed" DTS:TaskContact="Send Mail Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:PropertyExpression DTS:Name="Subject">"ACH transmission FAILED for batch " + (DT_WSTR,10)@[User::CurrentAchBatchId]</DTS:PropertyExpression>
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SendMailTask:SendMailTaskData SendMailTask:SMTPServer="{7DC20934-DC78-52E0-8D6B-5B3CD180E150}" SendMailTask:From="ach-batch@contoso.example" SendMailTask:To="etl-ops@contoso.example" SendMailTask:Subject="ACH transmission FAILED" SendMailTask:Priority="High" SendMailTask:MessageSource="SFTP upload to the ACH operator failed. Cutoff risk - escalate immediately." />
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+      <DTS:PrecedenceConstraints>
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{9E8D452B-0AB5-5F64-A1DE-AC0A88719F2B}" DTS:From="Package\FELC Each ACH Batch\DFT Build NACHA File" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\FELC Each ACH Batch\EPT PGP Encrypt" />
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint 1]" DTS:CreationName="" DTS:DTSID="{6803C482-3F9B-504C-9ABB-30306FDC93FC}" DTS:From="Package\FELC Each ACH Batch\EPT PGP Encrypt" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 1" DTS:To="Package\FELC Each ACH Batch\SCR Write WinSCP Script" />
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint 2]" DTS:CreationName="" DTS:DTSID="{00434B34-7FB5-5E92-8883-97F6E1EF4CCC}" DTS:From="Package\FELC Each ACH Batch\SCR Write WinSCP Script" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 2" DTS:To="Package\FELC Each ACH Batch\EPT SFTP Upload" />
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint 3]" DTS:CreationName="" DTS:DTSID="{A5F03F71-5856-5A56-8BD2-7202D8CA26B3}" DTS:From="Package\FELC Each ACH Batch\EPT SFTP Upload" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 3" DTS:To="Package\FELC Each ACH Batch\FST Delete WinSCP Script" />
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint 4]" DTS:CreationName="" DTS:DTSID="{A46F26D6-0D9E-5421-BD85-C8D0A304931E}" DTS:From="Package\FELC Each ACH Batch\FST Delete WinSCP Script" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 4" DTS:To="Package\FELC Each ACH Batch\FST Archive Clear Text" />
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint 5]" DTS:CreationName="" DTS:DTSID="{B797F44E-B194-5757-AB50-EB8B56E4E9D3}" DTS:From="Package\FELC Each ACH Batch\FST Archive Clear Text" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 5" DTS:To="Package\FELC Each ACH Batch\SQL Mark Transmitted" />
+        <DTS:PrecedenceConstraint DTS:refId="Package\FELC Each ACH Batch.PrecedenceConstraints[Constraint 6]" DTS:CreationName="" DTS:DTSID="{A6026862-5AB8-553E-868D-2A29FF6BDC5C}" DTS:From="Package\FELC Each ACH Batch\EPT SFTP Upload" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 6" DTS:To="Package\FELC Each ACH Batch\MAIL ACH Transmission Failed" DTS:Value="1" />
+      </DTS:PrecedenceConstraints>
+      <DTS:ForEachVariableMappings>
+        <DTS:ForEachVariableMapping DTS:refId="Package\FELC Each ACH Batch.ForEachVariableMappings[Variable]" DTS:CreationName="" DTS:DTSID="{028A1D34-2BCC-5A6D-823E-D8068E1AE087}" DTS:ObjectName="Variable" DTS:ValueIndex="0" DTS:VariableName="User::CurrentAchBatchId" />
+        <DTS:ForEachVariableMapping DTS:refId="Package\FELC Each ACH Batch.ForEachVariableMappings[Variable1]" DTS:CreationName="" DTS:DTSID="{71C12B48-218D-5336-85F3-0C09CBB22954}" DTS:ObjectName="Variable1" DTS:ValueIndex="1" DTS:VariableName="User::CurrentCompanyId" />
+      </DTS:ForEachVariableMappings>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Complete Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Close batch with status Succeeded" DTS:DTSID="{140E8C19-A2AC-589B-ABA9-BA187866C23F}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Complete Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{4797D317-5BEF-5203-94D3-1B3A93A3252C}" SQLTask:SqlStatementSource="EXEC etl.usp_EndBatch @BatchId = ?, @Status = 'Succeeded', @RowsExtracted = ?, @RowsLoaded = ?, @RowsRejected = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::RowsExtracted" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="User::RowsLoaded" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::RowsRejected" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{DEDE1CF8-62BE-5F8C-A3AC-A2A12E332D6C}" DTS:From="Package\SQL Start Batch" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\SQL Get Pending ACH Batches" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 1]" DTS:CreationName="" DTS:DTSID="{263D3D70-B4CB-5372-AC28-CD722D543276}" DTS:From="Package\SQL Get Pending ACH Batches" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 1" DTS:To="Package\FELC Each ACH Batch" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 2]" DTS:CreationName="" DTS:DTSID="{80C48A59-E0F1-571F-B794-9137CC74CEB8}" DTS:From="Package\FELC Each ACH Batch" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 2" DTS:To="Package\SQL Complete Batch" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>

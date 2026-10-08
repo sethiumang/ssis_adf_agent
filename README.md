@@ -10,6 +10,9 @@ All generated artifacts follow **Microsoft Recommended patterns** from [learn.mi
 > **Product direction:** See the [AI-powered SSIS migration platform plan](docs/AI_MIGRATION_PLATFORM_PLAN.md)
 > for the proposed customer experience, architecture, trust model, reconciliation approach,
 > and delivery roadmap.
+>
+> **Test corpus:** [`samples/fsi/`](samples/fsi/README.md) contains 10 synthetic financial-services SSIS
+> packages (AML, sanctions, ACH, GL, risk, treasury) plus a validator that probes this engine.
 
 ```
 .dtsx file(s)  ──┐

@@ -1,0 +1,811 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" xmlns:SendMailTask="www.microsoft.com/sqlserver/dts/tasks/sendmailtask" DTS:refId="Package" DTS:CreationDate="1/15/2026 9:00:00 AM" DTS:CreationName="Microsoft.Package" DTS:CreatorComputerName="CONTOSO-ETLDEV01" DTS:CreatorName="CONTOSO\svc_ssis_dev" DTS:Description="Reconciles parsed bank statement lines (BAI2 / camt.053) against GL cash ledger postings, classifies matches and breaks, and alerts treasury operations." DTS:DTSID="{BEF55036-C089-5399-BD05-97CC13B3141C}" DTS:ExecutableType="Microsoft.Package" DTS:LastModifiedProductVersion="15.0.2000.180" DTS:LocaleID="1033" DTS:ObjectName="TRS_Bank_Statement_Reconciliation" DTS:PackageType="5" DTS:ProtectionLevel="0" DTS:VersionBuild="12" DTS:VersionGUID="{3A4B4FA7-A353-56FF-828B-800742811C41}">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[Treasury]" DTS:CreationName="OLEDB" DTS:DTSID="{2452CB21-F00A-5A0F-BBD1-1EC58FEC047B}" DTS:ObjectName="Treasury">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=TRSQL01.contoso.local;Initial Catalog=Treasury;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-TRS_Bank_Statement_Reconciliation-Treasury;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[FinanceDW]" DTS:CreationName="OLEDB" DTS:DTSID="{B651C94F-E601-569B-A682-CDE934E25403}" DTS:ObjectName="FinanceDW">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::FinanceDWConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=DWSQL01.contoso.local;Initial Catalog=FinanceDW;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-TRS_Bank_Statement_Reconciliation-FinanceDW;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ETLControl]" DTS:CreationName="OLEDB" DTS:DTSID="{A70D558E-21AF-5200-A841-947AE035C6D5}" DTS:ObjectName="ETLControl">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::ETLControlConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=ETLSQL01.contoso.local;Initial Catalog=ETLControl;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-TRS_Bank_Statement_Reconciliation-ETLControl;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[SMTP_Contoso]" DTS:CreationName="SMTP" DTS:DTSID="{49E1D507-7596-5F26-A2C3-AA8726E4E28B}" DTS:ObjectName="SMTP_Contoso">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="SmtpServer=smtp.contoso.local;UseWindowsAuthentication=True;EnableSsl=True;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:PackageParameters>
+    <DTS:PackageParameter DTS:CreationName="" DTS:DataType="16" DTS:DTSID="{FAFDAB57-D728-5C23-A698-A3F876801382}" DTS:ObjectName="BusinessDate" DTS:Required="True">
+      <DTS:Property DTS:DataType="16" DTS:Name="ParameterValue">2026-01-14T00:00:00</DTS:Property>
+    </DTS:PackageParameter>
+    <DTS:PackageParameter DTS:CreationName="" DTS:DataType="15" DTS:Description="Absolute tolerance for amount matching" DTS:DTSID="{AEDB50C6-EFD7-5A0D-A226-8869A64E4A09}" DTS:ObjectName="AmountTolerance">
+      <DTS:Property DTS:DataType="15" DTS:Name="ParameterValue">0.01</DTS:Property>
+    </DTS:PackageParameter>
+  </DTS:PackageParameters>
+  <DTS:Variables>
+    <DTS:Variable DTS:CreationName="" DTS:Description="ETLControl batch id" DTS:DTSID="{EF090622-984B-5E32-9271-1D392A5B0C79}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="BatchId">
+      <DTS:VariableValue DTS:DataType="20">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{3D7A617D-09AF-58BC-9632-586C78EE0DD2}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsExtracted">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{8AFCA010-9A5F-51F7-8313-0048EDF277BA}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsLoaded">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{FC50C536-CE5F-5F9B-8125-781377BAE887}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsRejected">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{1DF7488E-F42E-5469-9B39-A23519D9A838}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="BreakCount">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Start Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Register Bank statement reconciliation run in ETLControl.etl.Batch" DTS:DTSID="{D76C9ECF-CB59-51A0-B5A8-09A41A62CB36}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Start Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{A70D558E-21AF-5200-A841-947AE035C6D5}" SQLTask:SqlStatementSource="EXEC etl.usp_StartBatch @ProcessName = ?, @PackageName = ?, @ExecutionId = ?, @BatchId = ? OUTPUT;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="System::ServerExecutionID" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Output" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Clear Recon Day" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{1FA87F9A-6C1B-5D43-8340-1F8ED3AD4D2C}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Clear Recon Day" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{2452CB21-F00A-5A0F-BBD1-1EC58FEC047B}" SQLTask:SqlStatementSource="DELETE FROM trs.ReconMatched WHERE StatementDate = ?; DELETE FROM trs.ReconBreak WHERE StatementDate = ?; DELETE FROM trs.ReconSummary WHERE StatementDate = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="$Package::BusinessDate" SQLTask:ParameterDirection="Input" SQLTask:DataType="7" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="$Package::BusinessDate" SQLTask:ParameterDirection="Input" SQLTask:DataType="7" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="$Package::BusinessDate" SQLTask:ParameterDirection="Input" SQLTask:DataType="7" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\DFT Match Bank To GL" DTS:CreationName="Microsoft.Pipeline" DTS:Description="Data Flow Task" DTS:DTSID="{B34CFECD-52EE-562F-8F94-2FDC90B80A5D}" DTS:ExecutableType="Microsoft.Pipeline" DTS:LocaleID="-1" DTS:ObjectName="DFT Match Bank To GL" DTS:TaskContact="Performs high-performance data extraction, transformation and loading;Microsoft Corporation; Microsoft SQL Server; (C) Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines" componentClassID="Microsoft.OLEDBSource" description="OLE DB Source" name="OLE SRC Bank Statement Lines" version="7" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset" />
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">SELECT BankAccountId, BankReference, StatementDate, ValueDate, Amount, BaiTypeCode
+FROM trs.BankStatementLine WHERE StatementDate = ?</property>
+                <property dataType="System.String" name="SqlCommandVariable" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">2</property>
+                <property dataType="System.String" name="ParameterMapping">"Parameter0:Input",{FAFDAB57-D728-5C23-A698-A3F876801382};</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Treasury]" connectionManagerRefId="Package.ConnectionManagers[Treasury]" name="OleDbConnection" />
+              </connections>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankAccountId]" dataType="wstr" length="34" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[BankAccountId]" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankAccountId]" name="BankAccountId" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankReference]" dataType="wstr" length="35" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[BankReference]" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankReference]" name="BankReference" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[StatementDate]" dataType="dbDate" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[StatementDate]" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[StatementDate]" name="StatementDate" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[ValueDate]" dataType="dbDate" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[ValueDate]" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[ValueDate]" name="ValueDate" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[Amount]" dataType="numeric" precision="19" scale="2" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[Amount]" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[Amount]" name="Amount" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BaiTypeCode]" dataType="wstr" length="3" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[BaiTypeCode]" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BaiTypeCode]" name="BaiTypeCode" />
+                  </outputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[BankAccountId]" dataType="wstr" length="34" name="BankAccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[BankReference]" dataType="wstr" length="35" name="BankReference" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[StatementDate]" dataType="dbDate" name="StatementDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[ValueDate]" dataType="dbDate" name="ValueDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[Amount]" dataType="numeric" precision="19" scale="2" name="Amount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].ExternalColumns[BaiTypeCode]" dataType="wstr" length="3" name="BaiTypeCode" />
+                  </externalMetadataColumns>
+                </output>
+                <output refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Error Output]" isErrorOut="true" name="OLE DB Source Error Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings" componentClassID="Microsoft.OLEDBSource" description="OLE DB Source" name="OLE SRC GL Cash Postings" version="7" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset" />
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">SELECT m.BankAccountId, f.ExternalReference AS BankReference, f.PostingDate, f.NetAmount AS Amount, f.JournalId
+FROM dw.FactGLJournalLine f JOIN ref.GlBankAccountMap m ON m.GlAccount = f.GlAccount
+WHERE f.PostingDate = ?</property>
+                <property dataType="System.String" name="SqlCommandVariable" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">2</property>
+                <property dataType="System.String" name="ParameterMapping">"Parameter0:Input",{FAFDAB57-D728-5C23-A698-A3F876801382};</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[FinanceDW]" connectionManagerRefId="Package.ConnectionManagers[FinanceDW]" name="OleDbConnection" />
+              </connections>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankAccountId]" dataType="wstr" length="34" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[BankAccountId]" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankAccountId]" name="BankAccountId" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankReference]" dataType="wstr" length="35" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[BankReference]" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankReference]" name="BankReference" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[PostingDate]" dataType="dbDate" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[PostingDate]" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[PostingDate]" name="PostingDate" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[Amount]" dataType="numeric" precision="19" scale="2" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[Amount]" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[Amount]" name="Amount" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[JournalId]" dataType="i8" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[JournalId]" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[JournalId]" name="JournalId" />
+                  </outputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[BankAccountId]" dataType="wstr" length="34" name="BankAccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[BankReference]" dataType="wstr" length="35" name="BankReference" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[PostingDate]" dataType="dbDate" name="PostingDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[Amount]" dataType="numeric" precision="19" scale="2" name="Amount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].ExternalColumns[JournalId]" dataType="i8" name="JournalId" />
+                  </externalMetadataColumns>
+                </output>
+                <output refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Error Output]" isErrorOut="true" name="OLE DB Source Error Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\SRT Bank" componentClassID="Microsoft.Sort" description="Sort" name="SRT Bank" version="0">
+              <properties>
+                <property dataType="System.Boolean" name="EliminateDuplicates">false</property>
+                <property dataType="System.Int32" name="MaximumThreads">-1</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input]" name="Sort Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input].Columns[BankAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="BankAccountId" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankAccountId]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">1</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input].Columns[BankReference]" cachedDataType="wstr" cachedLength="35" cachedName="BankReference" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankReference]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">2</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input].Columns[StatementDate]" cachedDataType="dbDate" cachedName="StatementDate" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[StatementDate]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input].Columns[ValueDate]" cachedDataType="dbDate" cachedName="ValueDate" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[ValueDate]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input].Columns[Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Amount" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[Amount]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input].Columns[BaiTypeCode]" cachedDataType="wstr" cachedLength="3" cachedName="BaiTypeCode" lineageId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BaiTypeCode]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output]" isSorted="true" name="Sort Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BankAccountId]" dataType="wstr" length="34" sortKeyPosition="1" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BankAccountId]" name="BankAccountId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankAccountId]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BankReference]" dataType="wstr" length="35" sortKeyPosition="2" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BankReference]" name="BankReference">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BankReference]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[StatementDate]" dataType="dbDate" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[StatementDate]" name="StatementDate">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[StatementDate]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[ValueDate]" dataType="dbDate" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[ValueDate]" name="ValueDate">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[ValueDate]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[Amount]" dataType="numeric" precision="19" scale="2" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[Amount]" name="Amount">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[Amount]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BaiTypeCode]" dataType="wstr" length="3" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BaiTypeCode]" name="BaiTypeCode">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output].Columns[BaiTypeCode]}</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\SRT GL" componentClassID="Microsoft.Sort" description="Sort" name="SRT GL" version="0">
+              <properties>
+                <property dataType="System.Boolean" name="EliminateDuplicates">false</property>
+                <property dataType="System.Int32" name="MaximumThreads">-1</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input]" name="Sort Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input].Columns[BankAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="BankAccountId" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankAccountId]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">1</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input].Columns[BankReference]" cachedDataType="wstr" cachedLength="35" cachedName="BankReference" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankReference]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">2</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input].Columns[PostingDate]" cachedDataType="dbDate" cachedName="PostingDate" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[PostingDate]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input].Columns[Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Amount" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[Amount]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                    <inputColumn refId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input].Columns[JournalId]" cachedDataType="i8" cachedName="JournalId" lineageId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[JournalId]">
+                      <properties>
+                        <property dataType="System.Int32" name="NewSortKeyPosition">0</property>
+                        <property dataType="System.Int32" name="NewComparisonFlags">0</property>
+                      </properties>
+                    </inputColumn>
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output]" isSorted="true" name="Sort Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[BankAccountId]" dataType="wstr" length="34" sortKeyPosition="1" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[BankAccountId]" name="BankAccountId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankAccountId]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[BankReference]" dataType="wstr" length="35" sortKeyPosition="2" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[BankReference]" name="BankReference">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[BankReference]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[PostingDate]" dataType="dbDate" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[PostingDate]" name="PostingDate">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[PostingDate]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[Amount]" dataType="numeric" precision="19" scale="2" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[Amount]" name="Amount">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[Amount]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[JournalId]" dataType="i8" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[JournalId]" name="JournalId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="SortColumnId">#{Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output].Columns[JournalId]}</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL" componentClassID="Microsoft.MergeJoin" description="Merge Join" name="MJ Full Outer Bank GL" version="2">
+              <properties>
+                <property dataType="System.Int32" typeConverter="JoinType" name="JoinType">0</property>
+                <property dataType="System.Int32" name="NumKeyColumns">2</property>
+                <property dataType="System.Boolean" name="TreatNullsAsEqual">true</property>
+                <property dataType="System.Int32" name="MaxBuffersPerInput">5</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input]" name="Merge Join Left Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[BankAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="BankAccountId" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BankAccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[BankReference]" cachedDataType="wstr" cachedLength="35" cachedName="BankReference" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BankReference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[StatementDate]" cachedDataType="dbDate" cachedName="StatementDate" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Amount" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[BaiTypeCode]" cachedDataType="wstr" cachedLength="3" cachedName="BaiTypeCode" lineageId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output].Columns[BaiTypeCode]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+                <input refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input]" name="Merge Join Right Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[BankAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="BankAccountId" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[BankAccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[BankReference]" cachedDataType="wstr" cachedLength="35" cachedName="BankReference" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[BankReference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[PostingDate]" cachedDataType="dbDate" cachedName="PostingDate" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[PostingDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Amount" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[JournalId]" cachedDataType="i8" cachedName="JournalId" lineageId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output].Columns[JournalId]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output]" name="Merge Join Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]" dataType="wstr" length="34" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]" name="Bank_AccountId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[BankAccountId]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Reference]" dataType="wstr" length="35" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Reference]" name="Bank_Reference">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[BankReference]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_StatementDate]" dataType="dbDate" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_StatementDate]" name="Bank_StatementDate">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[StatementDate]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]" dataType="numeric" precision="19" scale="2" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]" name="Bank_Amount">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[Amount]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_BaiTypeCode]" dataType="wstr" length="3" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_BaiTypeCode]" name="Bank_BaiTypeCode">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input].Columns[BaiTypeCode]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_AccountId]" dataType="wstr" length="34" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_AccountId]" name="GL_AccountId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[BankAccountId]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Reference]" dataType="wstr" length="35" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Reference]" name="GL_Reference">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[BankReference]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_PostingDate]" dataType="dbDate" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_PostingDate]" name="GL_PostingDate">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[PostingDate]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]" dataType="numeric" precision="19" scale="2" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]" name="GL_Amount">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[Amount]}</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_JournalId]" dataType="i8" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_JournalId]" name="GL_JournalId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="InputColumnID">#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input].Columns[JournalId]}</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\DER Classify" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Classify" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input]" name="Derived Column Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input].Columns[Bank_AccountId]" cachedDataType="wstr" cachedLength="34" cachedName="Bank_AccountId" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input].Columns[GL_AccountId]" cachedDataType="wstr" cachedLength="34" cachedName="GL_AccountId" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_AccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input].Columns[Bank_Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Bank_Amount" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input].Columns[GL_Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="GL_Amount" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input].Columns[GL_Reference]" cachedDataType="wstr" cachedLength="35" cachedName="GL_Reference" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Reference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input].Columns[Bank_Reference]" cachedDataType="wstr" cachedLength="35" cachedName="Bank_Reference" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Reference]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[ReconAccountId]" dataType="wstr" length="34" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[ReconAccountId]" name="ReconAccountId">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">ISNULL(#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]}) ? #{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_AccountId]} : #{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]}</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">ISNULL([Bank_AccountId]) ? [GL_AccountId] : [Bank_AccountId]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[StatementDate]" dataType="dbDate" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[StatementDate]" name="StatementDate">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">(DT_DBDATE)@[$Package::BusinessDate]</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">(DT_DBDATE)@[$Package::BusinessDate]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[Variance]" dataType="numeric" precision="19" scale="2" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[Variance]" name="Variance">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">(ISNULL(#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]}) ? (DT_NUMERIC,19,2)0 : #{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]}) - (ISNULL(#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]}) ? (DT_NUMERIC,19,2)0 : #{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]})</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">(ISNULL([Bank_Amount]) ? (DT_NUMERIC,19,2)0 : [Bank_Amount]) - (ISNULL([GL_Amount]) ? (DT_NUMERIC,19,2)0 : [GL_Amount])</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]" dataType="wstr" length="12" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]" name="MatchStatus">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">ISNULL(#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Reference]}) ? "BANK_ONLY" : ISNULL(#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Reference]}) ? "GL_ONLY" : ABS(#{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]} - #{Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]}) &gt; @[$Package::AmountTolerance] ? "AMOUNT_BREAK" : "MATCHED"</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">ISNULL([GL_Reference]) ? "BANK_ONLY" : ISNULL([Bank_Reference]) ? "GL_ONLY" : ABS([Bank_Amount] - [GL_Amount]) &gt; @[$Package::AmountTolerance] ? "AMOUNT_BREAK" : "MATCHED"</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\CSPL Match Status" componentClassID="Microsoft.ConditionalSplit" description="Conditional Split" name="CSPL Match Status" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\CSPL Match Status.Inputs[Conditional Split Input]" name="Conditional Split Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\CSPL Match Status.Inputs[Conditional Split Input].Columns[MatchStatus]" cachedDataType="wstr" cachedLength="12" cachedName="MatchStatus" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Matched]" exclusionGroup="1" name="Matched" synchronousInputId="Package\DFT Match Bank To GL\CSPL Match Status.Inputs[Conditional Split Input]">
+                  <properties>
+                    <property dataType="System.Int32" name="EvaluationOrder">0</property>
+                    <property dataType="System.String" expressionType="Notify" name="FriendlyExpression">[MatchStatus] == "MATCHED"</property>
+                    <property dataType="System.String" containsID="true" name="Expression">#{Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]} == "MATCHED"</property>
+                    <property dataType="System.Boolean" name="IsDefaultOut">false</property>
+                  </properties>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Breaks]" exclusionGroup="1" name="Breaks" synchronousInputId="Package\DFT Match Bank To GL\CSPL Match Status.Inputs[Conditional Split Input]">
+                  <properties>
+                    <property dataType="System.Boolean" name="IsDefaultOut">true</property>
+                  </properties>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Conditional Split Error Output]" isErrorOut="true" name="Conditional Split Error Output" synchronousInputId="Package\DFT Match Bank To GL\CSPL Match Status.Inputs[Conditional Split Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Conditional Split Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Conditional Split Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Conditional Split Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Conditional Split Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\OLE DST ReconMatched" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST ReconMatched" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[trs].[ReconMatched]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Treasury]" connectionManagerRefId="Package.ConnectionManagers[Treasury]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[Bank_AccountId]" cachedDataType="wstr" cachedLength="34" cachedName="Bank_AccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_AccountId]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[Bank_Reference]" cachedDataType="wstr" cachedLength="35" cachedName="Bank_Reference" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Reference]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Reference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[Bank_StatementDate]" cachedDataType="dbDate" cachedName="Bank_StatementDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_StatementDate]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[Bank_Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Bank_Amount" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Amount]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[Bank_BaiTypeCode]" cachedDataType="wstr" cachedLength="3" cachedName="Bank_BaiTypeCode" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_BaiTypeCode]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_BaiTypeCode]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[GL_AccountId]" cachedDataType="wstr" cachedLength="34" cachedName="GL_AccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_AccountId]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_AccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[GL_Reference]" cachedDataType="wstr" cachedLength="35" cachedName="GL_Reference" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_Reference]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Reference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[GL_PostingDate]" cachedDataType="dbDate" cachedName="GL_PostingDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_PostingDate]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_PostingDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[GL_Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="GL_Amount" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_Amount]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[GL_JournalId]" cachedDataType="i8" cachedName="GL_JournalId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_JournalId]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_JournalId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[ReconAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="ReconAccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[ReconAccountId]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[ReconAccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[StatementDate]" cachedDataType="dbDate" cachedName="StatementDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[StatementDate]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[Variance]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Variance" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Variance]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[Variance]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].Columns[MatchStatus]" cachedDataType="wstr" cachedLength="12" cachedName="MatchStatus" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[MatchStatus]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_AccountId]" dataType="wstr" length="34" name="Bank_AccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Reference]" dataType="wstr" length="35" name="Bank_Reference" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_StatementDate]" dataType="dbDate" name="Bank_StatementDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Amount]" dataType="numeric" precision="19" scale="2" name="Bank_Amount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Bank_BaiTypeCode]" dataType="wstr" length="3" name="Bank_BaiTypeCode" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_AccountId]" dataType="wstr" length="34" name="GL_AccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_Reference]" dataType="wstr" length="35" name="GL_Reference" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_PostingDate]" dataType="dbDate" name="GL_PostingDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_Amount]" dataType="numeric" precision="19" scale="2" name="GL_Amount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[GL_JournalId]" dataType="i8" name="GL_JournalId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[ReconAccountId]" dataType="wstr" length="34" name="ReconAccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[StatementDate]" dataType="dbDate" name="StatementDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[Variance]" dataType="numeric" precision="19" scale="2" name="Variance" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input].ExternalColumns[MatchStatus]" dataType="wstr" length="12" name="MatchStatus" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\MC Breaks" componentClassID="Microsoft.Multicast" description="Multicast" name="MC Breaks" version="0">
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\MC Breaks.Inputs[Multicast Input 1]" name="Multicast Input 1">
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\MC Breaks.Outputs[Multicast Output 1]" name="Multicast Output 1" synchronousInputId="Package\DFT Match Bank To GL\MC Breaks.Inputs[Multicast Input 1]">
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Match Bank To GL\MC Breaks.Outputs[Multicast Output 2]" name="Multicast Output 2" synchronousInputId="Package\DFT Match Bank To GL\MC Breaks.Inputs[Multicast Input 1]">
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\OLE DST ReconBreak" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST ReconBreak" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[trs].[ReconBreak]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Treasury]" connectionManagerRefId="Package.ConnectionManagers[Treasury]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[Bank_AccountId]" cachedDataType="wstr" cachedLength="34" cachedName="Bank_AccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_AccountId]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_AccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[Bank_Reference]" cachedDataType="wstr" cachedLength="35" cachedName="Bank_Reference" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Reference]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Reference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[Bank_StatementDate]" cachedDataType="dbDate" cachedName="Bank_StatementDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_StatementDate]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[Bank_Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Bank_Amount" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Amount]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[Bank_BaiTypeCode]" cachedDataType="wstr" cachedLength="3" cachedName="Bank_BaiTypeCode" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_BaiTypeCode]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[Bank_BaiTypeCode]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[GL_AccountId]" cachedDataType="wstr" cachedLength="34" cachedName="GL_AccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_AccountId]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_AccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[GL_Reference]" cachedDataType="wstr" cachedLength="35" cachedName="GL_Reference" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_Reference]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Reference]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[GL_PostingDate]" cachedDataType="dbDate" cachedName="GL_PostingDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_PostingDate]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_PostingDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[GL_Amount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="GL_Amount" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_Amount]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_Amount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[GL_JournalId]" cachedDataType="i8" cachedName="GL_JournalId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_JournalId]" lineageId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output].Columns[GL_JournalId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[ReconAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="ReconAccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[ReconAccountId]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[ReconAccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[StatementDate]" cachedDataType="dbDate" cachedName="StatementDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[StatementDate]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[Variance]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Variance" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Variance]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[Variance]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].Columns[MatchStatus]" cachedDataType="wstr" cachedLength="12" cachedName="MatchStatus" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[MatchStatus]" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_AccountId]" dataType="wstr" length="34" name="Bank_AccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Reference]" dataType="wstr" length="35" name="Bank_Reference" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_StatementDate]" dataType="dbDate" name="Bank_StatementDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_Amount]" dataType="numeric" precision="19" scale="2" name="Bank_Amount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Bank_BaiTypeCode]" dataType="wstr" length="3" name="Bank_BaiTypeCode" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_AccountId]" dataType="wstr" length="34" name="GL_AccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_Reference]" dataType="wstr" length="35" name="GL_Reference" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_PostingDate]" dataType="dbDate" name="GL_PostingDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_Amount]" dataType="numeric" precision="19" scale="2" name="GL_Amount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[GL_JournalId]" dataType="i8" name="GL_JournalId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[ReconAccountId]" dataType="wstr" length="34" name="ReconAccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[StatementDate]" dataType="dbDate" name="StatementDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[Variance]" dataType="numeric" precision="19" scale="2" name="Variance" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input].ExternalColumns[MatchStatus]" dataType="wstr" length="12" name="MatchStatus" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\AGG Break Summary" componentClassID="Microsoft.Aggregate" description="Aggregate" name="AGG Break Summary" version="3">
+              <properties>
+                <property dataType="System.Int32" name="KeyScale">0</property>
+                <property dataType="System.String" name="Keys" />
+                <property dataType="System.Int32" name="CountDistinctScale">0</property>
+                <property dataType="System.Int32" name="AutoExtendFactor">25</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\AGG Break Summary.Inputs[Aggregate Input 1]" name="Aggregate Input 1">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Inputs[Aggregate Input 1].Columns[ReconAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="ReconAccountId" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[ReconAccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Inputs[Aggregate Input 1].Columns[StatementDate]" cachedDataType="dbDate" cachedName="StatementDate" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Inputs[Aggregate Input 1].Columns[MatchStatus]" cachedDataType="wstr" cachedLength="12" cachedName="MatchStatus" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Inputs[Aggregate Input 1].Columns[Variance]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="Variance" lineageId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[Variance]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1]" name="Aggregate Output 1">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[ReconAccountId]" dataType="wstr" length="34" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[ReconAccountId]" name="ReconAccountId">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="AggregationColumnId">#{Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[ReconAccountId]}</property>
+                        <property dataType="System.Int32" typeConverter="AggregationType" name="AggregationType">0</property>
+                        <property dataType="System.Int32" name="IsBig">0</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[StatementDate]" dataType="dbDate" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[StatementDate]" name="StatementDate">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="AggregationColumnId">#{Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[StatementDate]}</property>
+                        <property dataType="System.Int32" typeConverter="AggregationType" name="AggregationType">0</property>
+                        <property dataType="System.Int32" name="IsBig">0</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[MatchStatus]" dataType="wstr" length="12" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[MatchStatus]" name="MatchStatus">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="AggregationColumnId">#{Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[MatchStatus]}</property>
+                        <property dataType="System.Int32" typeConverter="AggregationType" name="AggregationType">0</property>
+                        <property dataType="System.Int32" name="IsBig">0</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[BreakCount]" dataType="i8" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[BreakCount]" name="BreakCount">
+                      <properties>
+                        <property dataType="System.Int32" typeConverter="AggregationType" name="AggregationType">2</property>
+                        <property dataType="System.Int32" name="IsBig">0</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[TotalVariance]" dataType="numeric" precision="19" scale="2" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[TotalVariance]" name="TotalVariance">
+                      <properties>
+                        <property dataType="System.Int32" containsID="true" name="AggregationColumnId">#{Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output].Columns[Variance]}</property>
+                        <property dataType="System.Int32" typeConverter="AggregationType" name="AggregationType">4</property>
+                        <property dataType="System.Int32" name="IsBig">0</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Match Bank To GL\OLE DST ReconSummary" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST ReconSummary" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[trs].[ReconSummary]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[Treasury]" connectionManagerRefId="Package.ConnectionManagers[Treasury]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].Columns[ReconAccountId]" cachedDataType="wstr" cachedLength="34" cachedName="ReconAccountId" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[ReconAccountId]" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[ReconAccountId]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].Columns[StatementDate]" cachedDataType="dbDate" cachedName="StatementDate" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[StatementDate]" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[StatementDate]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].Columns[MatchStatus]" cachedDataType="wstr" cachedLength="12" cachedName="MatchStatus" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[MatchStatus]" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[MatchStatus]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].Columns[BreakCount]" cachedDataType="i8" cachedName="BreakCount" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[BreakCount]" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[BreakCount]" />
+                    <inputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].Columns[TotalVariance]" cachedDataType="numeric" cachedPrecision="19" cachedScale="2" cachedName="TotalVariance" externalMetadataColumnId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[TotalVariance]" lineageId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1].Columns[TotalVariance]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[ReconAccountId]" dataType="wstr" length="34" name="ReconAccountId" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[StatementDate]" dataType="dbDate" name="StatementDate" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[MatchStatus]" dataType="wstr" length="12" name="MatchStatus" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[BreakCount]" dataType="i8" name="BreakCount" />
+                    <externalMetadataColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input].ExternalColumns[TotalVariance]" dataType="numeric" precision="19" scale="2" name="TotalVariance" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT Match Bank To GL.Paths[OLE DB Source Output]" endId="Package\DFT Match Bank To GL\SRT Bank.Inputs[Sort Input]" name="OLE DB Source Output" startId="Package\DFT Match Bank To GL\OLE SRC Bank Statement Lines.Outputs[OLE DB Source Output]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[OLE DB Source Output 1]" endId="Package\DFT Match Bank To GL\SRT GL.Inputs[Sort Input]" name="OLE DB Source Output 1" startId="Package\DFT Match Bank To GL\OLE SRC GL Cash Postings.Outputs[OLE DB Source Output]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Sort Output]" endId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Left Input]" name="Sort Output" startId="Package\DFT Match Bank To GL\SRT Bank.Outputs[Sort Output]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Sort Output 1]" endId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Inputs[Merge Join Right Input]" name="Sort Output 1" startId="Package\DFT Match Bank To GL\SRT GL.Outputs[Sort Output]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Merge Join Output]" endId="Package\DFT Match Bank To GL\DER Classify.Inputs[Derived Column Input]" name="Merge Join Output" startId="Package\DFT Match Bank To GL\MJ Full Outer Bank GL.Outputs[Merge Join Output]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Derived Column Output]" endId="Package\DFT Match Bank To GL\CSPL Match Status.Inputs[Conditional Split Input]" name="Derived Column Output" startId="Package\DFT Match Bank To GL\DER Classify.Outputs[Derived Column Output]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Matched]" endId="Package\DFT Match Bank To GL\OLE DST ReconMatched.Inputs[OLE DB Destination Input]" name="Matched" startId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Matched]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Breaks]" endId="Package\DFT Match Bank To GL\MC Breaks.Inputs[Multicast Input 1]" name="Breaks" startId="Package\DFT Match Bank To GL\CSPL Match Status.Outputs[Breaks]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Multicast Output 1]" endId="Package\DFT Match Bank To GL\OLE DST ReconBreak.Inputs[OLE DB Destination Input]" name="Multicast Output 1" startId="Package\DFT Match Bank To GL\MC Breaks.Outputs[Multicast Output 1]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Multicast Output 2]" endId="Package\DFT Match Bank To GL\AGG Break Summary.Inputs[Aggregate Input 1]" name="Multicast Output 2" startId="Package\DFT Match Bank To GL\MC Breaks.Outputs[Multicast Output 2]" />
+            <path refId="Package\DFT Match Bank To GL.Paths[Aggregate Output 1]" endId="Package\DFT Match Bank To GL\OLE DST ReconSummary.Inputs[OLE DB Destination Input]" name="Aggregate Output 1" startId="Package\DFT Match Bank To GL\AGG Break Summary.Outputs[Aggregate Output 1]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Count Breaks" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{07840E5D-366E-5481-9200-DA96FD8D00AB}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Count Breaks" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{2452CB21-F00A-5A0F-BBD1-1EC58FEC047B}" SQLTask:SqlStatementSource="SELECT COUNT(*) AS BreakCount FROM trs.ReconBreak WHERE StatementDate = ? AND ABS(Variance) &gt; ?;" SQLTask:ResultType="ResultSetType_SingleRow">
+          <SQLTask:ResultBinding SQLTask:ResultName="BreakCount" SQLTask:DtsVariableName="User::BreakCount" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="$Package::BusinessDate" SQLTask:ParameterDirection="Input" SQLTask:DataType="7" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="$Package::AmountTolerance" SQLTask:ParameterDirection="Input" SQLTask:DataType="131" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Create Exception Cases" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{FCF16BD4-9057-5595-B54A-613C45B6D371}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Create Exception Cases" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{2452CB21-F00A-5A0F-BBD1-1EC58FEC047B}" SQLTask:SqlStatementSource="EXEC trs.usp_CreateReconExceptionCases @StatementDate = ?, @AgingDays = 3;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="$Package::BusinessDate" SQLTask:ParameterDirection="Input" SQLTask:DataType="7" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\MAIL Treasury Breaks" DTS:CreationName="Microsoft.SendMailTask" DTS:Description="Send Mail Task" DTS:DTSID="{E8968EEE-BB98-57CF-A566-CA5E7EBDCE49}" DTS:ExecutableType="Microsoft.SendMailTask" DTS:LocaleID="-1" DTS:ObjectName="MAIL Treasury Breaks" DTS:TaskContact="Send Mail Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:PropertyExpression DTS:Name="Subject">"Bank rec: " + (DT_WSTR,10)@[User::BreakCount] + " breaks for " + (DT_WSTR,30)@[$Package::BusinessDate]</DTS:PropertyExpression>
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SendMailTask:SendMailTaskData SendMailTask:SMTPServer="{49E1D507-7596-5F26-A2C3-AA8726E4E28B}" SendMailTask:From="treasury-recon@contoso.example" SendMailTask:To="treasury-ops@contoso.example" SendMailTask:Subject="Bank reconciliation breaks" SendMailTask:Priority="Normal" SendMailTask:MessageSource="Unreconciled bank vs GL items exist. See trs.ReconBreak." />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Complete Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Close batch with status Succeeded" DTS:DTSID="{9133613F-EEB7-5D4E-9420-A946B5B443EA}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Complete Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{A70D558E-21AF-5200-A841-947AE035C6D5}" SQLTask:SqlStatementSource="EXEC etl.usp_EndBatch @BatchId = ?, @Status = 'Succeeded', @RowsExtracted = ?, @RowsLoaded = ?, @RowsRejected = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::RowsExtracted" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="User::RowsLoaded" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::RowsRejected" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{DFFFA8DA-0951-5865-BA3E-7F05C2799C7D}" DTS:From="Package\SQL Start Batch" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\SQL Clear Recon Day" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 1]" DTS:CreationName="" DTS:DTSID="{1EB6D685-0BF0-5946-8954-D63D27F12FFC}" DTS:From="Package\SQL Clear Recon Day" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 1" DTS:To="Package\DFT Match Bank To GL" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 2]" DTS:CreationName="" DTS:DTSID="{37C8FFC3-2983-511E-8F13-61486EC9D5FC}" DTS:From="Package\DFT Match Bank To GL" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 2" DTS:To="Package\SQL Count Breaks" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 3]" DTS:CreationName="" DTS:DTSID="{C652B13D-A84C-5087-B373-7EF53427D409}" DTS:EvalOp="3" DTS:Expression="@[User::BreakCount] &gt; 0" DTS:From="Package\SQL Count Breaks" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 3" DTS:To="Package\SQL Create Exception Cases" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 4]" DTS:CreationName="" DTS:DTSID="{9A693596-5D1A-58FC-BFC1-30828360AD20}" DTS:From="Package\SQL Create Exception Cases" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 4" DTS:To="Package\MAIL Treasury Breaks" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 5]" DTS:CreationName="" DTS:DTSID="{A56E7602-55F3-54DA-B1CF-B7B9E882401B}" DTS:EvalOp="3" DTS:Expression="@[User::BreakCount] == 0" DTS:From="Package\SQL Count Breaks" DTS:LogicalAnd="False" DTS:ObjectName="Constraint 5" DTS:To="Package\SQL Complete Batch" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 6]" DTS:CreationName="" DTS:DTSID="{60AD8809-AB48-565E-934E-F684C0D3328E}" DTS:From="Package\MAIL Treasury Breaks" DTS:LogicalAnd="False" DTS:ObjectName="Constraint 6" DTS:To="Package\SQL Complete Batch" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>

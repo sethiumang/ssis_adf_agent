@@ -1,0 +1,613 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:CreationDate="1/15/2026 9:00:00 AM" DTS:CreationName="Microsoft.Package" DTS:CreatorComputerName="CONTOSO-ETLDEV01" DTS:CreatorName="CONTOSO\svc_ssis_dev" DTS:Description="Maintains dw.DimCustomer as a Type 2 slowly changing dimension, tracking KYC risk rating, PEP flag, segment and country history for AML and conduct analytics." DTS:DTSID="{86785713-DE7C-5B33-919C-3405BEE8AFBD}" DTS:ExecutableType="Microsoft.Package" DTS:LastModifiedProductVersion="15.0.2000.180" DTS:LocaleID="1033" DTS:ObjectName="CRM_Customer_KYC_SCD2" DTS:PackageType="5" DTS:ProtectionLevel="0" DTS:VersionBuild="12" DTS:VersionGUID="{BBB65FBA-648A-5875-9C38-64612DFC1298}">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[CRM]" DTS:CreationName="OLEDB" DTS:DTSID="{195C664D-DE1C-53CA-B336-68DEB3BD1788}" DTS:ObjectName="CRM">
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=CRMSQL01.contoso.local;Initial Catalog=ContosoCRM;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-CRM_Customer_KYC_SCD2-CRM;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[FinanceDW]" DTS:CreationName="OLEDB" DTS:DTSID="{DA3478ED-F3A7-5DFD-B6F7-A231C54654DC}" DTS:ObjectName="FinanceDW">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::FinanceDWConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=DWSQL01.contoso.local;Initial Catalog=FinanceDW;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-CRM_Customer_KYC_SCD2-FinanceDW;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ETLControl]" DTS:CreationName="OLEDB" DTS:DTSID="{C8449056-95B1-50AC-829A-D7B6C357E537}" DTS:ObjectName="ETLControl">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::ETLControlConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=ETLSQL01.contoso.local;Initial Catalog=ETLControl;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-CRM_Customer_KYC_SCD2-ETLControl;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:PackageParameters>
+    <DTS:PackageParameter DTS:CreationName="" DTS:DataType="16" DTS:DTSID="{46D3FEA9-59F1-57C4-A48C-D17061AA4A7B}" DTS:ObjectName="BusinessDate" DTS:Required="True">
+      <DTS:Property DTS:DataType="16" DTS:Name="ParameterValue">2026-01-14T00:00:00</DTS:Property>
+    </DTS:PackageParameter>
+  </DTS:PackageParameters>
+  <DTS:Variables>
+    <DTS:Variable DTS:CreationName="" DTS:Description="ETLControl batch id" DTS:DTSID="{5B076A5A-6825-5A4F-ACB0-7A7EDBD24880}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="BatchId">
+      <DTS:VariableValue DTS:DataType="20">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{0D7F12D8-E13A-5F8C-873C-DC485BA309E2}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsExtracted">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{78F2B527-AC36-5EC7-B856-3A401AE6E881}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsLoaded">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{B830E92E-B533-56E8-8268-3568B6632489}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsRejected">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Start Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Register Customer KYC SCD2 run in ETLControl.etl.Batch" DTS:DTSID="{ED0E8DFB-469F-5913-B75C-0C200A142060}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Start Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{C8449056-95B1-50AC-829A-D7B6C357E537}" SQLTask:SqlStatementSource="EXEC etl.usp_StartBatch @ProcessName = ?, @PackageName = ?, @ExecutionId = ?, @BatchId = ? OUTPUT;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="System::ServerExecutionID" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Output" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SEQ Load DimCustomer" DTS:CreationName="STOCK:SEQUENCE" DTS:Description="Sequence Container" DTS:DTSID="{929E4ED9-2EDC-5A6E-A47A-267F56A7C2AF}" DTS:ExecutableType="STOCK:SEQUENCE" DTS:LocaleID="-1" DTS:ObjectName="SEQ Load DimCustomer">
+      <DTS:Variables />
+      <DTS:Executables>
+        <DTS:Executable DTS:refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2" DTS:CreationName="Microsoft.Pipeline" DTS:Description="Data Flow Task" DTS:DTSID="{673E49CC-4F16-5D11-96F6-BF52E24114A1}" DTS:ExecutableType="Microsoft.Pipeline" DTS:LocaleID="-1" DTS:ObjectName="DFT DimCustomer SCD2" DTS:TaskContact="Performs high-performance data extraction, transformation and loading;Microsoft Corporation; Microsoft SQL Server; (C) Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <pipeline version="1">
+              <components>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers" componentClassID="Microsoft.OLEDBSource" description="OLE DB Source" name="OLE SRC CRM Customers" version="7" usesDispositions="true">
+                  <properties>
+                    <property dataType="System.Int32" name="CommandTimeout">0</property>
+                    <property dataType="System.String" name="OpenRowset" />
+                    <property dataType="System.String" name="OpenRowsetVariable" />
+                    <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">SELECT c.CustomerNumber, c.FirstName, c.LastName, c.DateOfBirth, c.TaxIdLast4, c.Email,
+       c.Segment, k.RiskRating AS KycRiskRating, k.IsPep AS PepFlag, c.CountryOfResidence, c.ModifiedDate
+FROM crm.Customer c
+JOIN kyc.CustomerRiskProfile k ON k.CustomerNumber = c.CustomerNumber AND k.IsCurrent = 1
+WHERE c.ModifiedDate &gt;= DATEADD(day, -1, ?) OR k.ReviewedDate &gt;= DATEADD(day, -1, ?)</property>
+                    <property dataType="System.String" name="SqlCommandVariable" />
+                    <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                    <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                    <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">2</property>
+                    <property dataType="System.String" name="ParameterMapping">"Parameter0:Input",{46D3FEA9-59F1-57C4-A48C-D17061AA4A7B};"Parameter1:Input",{46D3FEA9-59F1-57C4-A48C-D17061AA4A7B};</property>
+                  </properties>
+                  <connections>
+                    <connection refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[CRM]" connectionManagerRefId="Package.ConnectionManagers[CRM]" name="OleDbConnection" />
+                  </connections>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" dataType="wstr" length="20" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[CustomerNumber]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" name="CustomerNumber" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[FirstName]" dataType="wstr" length="50" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[FirstName]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[FirstName]" name="FirstName" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[LastName]" dataType="wstr" length="80" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[LastName]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[LastName]" name="LastName" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]" dataType="dbDate" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[DateOfBirth]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]" name="DateOfBirth" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[TaxIdLast4]" dataType="wstr" length="4" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[TaxIdLast4]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[TaxIdLast4]" name="TaxIdLast4" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Email]" dataType="wstr" length="256" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[Email]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Email]" name="Email" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Segment]" dataType="wstr" length="20" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[Segment]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Segment]" name="Segment" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[KycRiskRating]" dataType="wstr" length="10" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[KycRiskRating]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[KycRiskRating]" name="KycRiskRating" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[PepFlag]" dataType="bool" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[PepFlag]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[PepFlag]" name="PepFlag" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]" dataType="wstr" length="2" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[CountryOfResidence]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]" name="CountryOfResidence" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[ModifiedDate]" dataType="dbTimeStamp" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[ModifiedDate]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[ModifiedDate]" name="ModifiedDate" />
+                      </outputColumns>
+                      <externalMetadataColumns isUsed="True">
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[CustomerNumber]" dataType="wstr" length="20" name="CustomerNumber" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[FirstName]" dataType="wstr" length="50" name="FirstName" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[LastName]" dataType="wstr" length="80" name="LastName" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[DateOfBirth]" dataType="dbDate" name="DateOfBirth" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[TaxIdLast4]" dataType="wstr" length="4" name="TaxIdLast4" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[Email]" dataType="wstr" length="256" name="Email" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[Segment]" dataType="wstr" length="20" name="Segment" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[KycRiskRating]" dataType="wstr" length="10" name="KycRiskRating" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[PepFlag]" dataType="bool" name="PepFlag" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[CountryOfResidence]" dataType="wstr" length="2" name="CountryOfResidence" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].ExternalColumns[ModifiedDate]" dataType="dbTimeStamp" name="ModifiedDate" />
+                      </externalMetadataColumns>
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Error Output]" isErrorOut="true" name="OLE DB Source Error Output">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER PII Masking" version="0" usesDispositions="true">
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input]" name="Derived Column Input">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input].Columns[FirstName]" cachedDataType="wstr" cachedLength="50" cachedName="FirstName" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[FirstName]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input].Columns[LastName]" cachedDataType="wstr" cachedLength="80" cachedName="LastName" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[LastName]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input].Columns[TaxIdLast4]" cachedDataType="wstr" cachedLength="4" cachedName="TaxIdLast4" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[TaxIdLast4]" />
+                      </inputColumns>
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[FullName]" dataType="wstr" length="131" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[FullName]" name="FullName">
+                          <properties>
+                            <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">TRIM(#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[FirstName]}) + " " + TRIM(#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[LastName]})</property>
+                            <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">TRIM([FirstName]) + " " + TRIM([LastName])</property>
+                          </properties>
+                        </outputColumn>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[TaxIdMasked]" dataType="wstr" length="11" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[TaxIdMasked]" name="TaxIdMasked">
+                          <properties>
+                            <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">"***-**-" + #{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[TaxIdLast4]}</property>
+                            <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">"***-**-" + [TaxIdLast4]</property>
+                          </properties>
+                        </outputColumn>
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer" componentClassID="Microsoft.SCD" description="Slowly Changing Dimension" name="SCD DimCustomer" version="1" usesDispositions="true">
+                  <properties>
+                    <property dataType="System.String" name="SQLCommand">SELECT [CustomerNumber], [FullName], [Email], [TaxIdMasked], [KycRiskRating], [PepFlag], [Segment], [CountryOfResidence], [DateOfBirth] FROM [dw].[DimCustomer] WHERE [IsCurrent] = 1</property>
+                    <property dataType="System.String" name="CurrentRowWhere">[IsCurrent] = 1</property>
+                    <property dataType="System.Boolean" name="EnableInferredMember">false</property>
+                    <property dataType="System.Boolean" name="FailOnFixedAttributeChange">true</property>
+                    <property dataType="System.Boolean" name="FailOnLookupFailure">false</property>
+                    <property dataType="System.Int32" name="IncomingRowChangeType">1</property>
+                    <property dataType="System.Boolean" name="UpdateChangingAttributeHistory">true</property>
+                  </properties>
+                  <connections>
+                    <connection refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[FinanceDW]" connectionManagerRefId="Package.ConnectionManagers[FinanceDW]" name="OleDbConnection" />
+                  </connections>
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]" name="Slowly Changing Dimension Input">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">1</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[FullName]" cachedDataType="wstr" cachedLength="131" cachedName="FullName" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[FullName]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">2</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[Email]" cachedDataType="wstr" cachedLength="256" cachedName="Email" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Email]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">2</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[TaxIdMasked]" cachedDataType="wstr" cachedLength="11" cachedName="TaxIdMasked" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[TaxIdMasked]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">2</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[KycRiskRating]" cachedDataType="wstr" cachedLength="10" cachedName="KycRiskRating" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[KycRiskRating]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">3</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[PepFlag]" cachedDataType="bool" cachedName="PepFlag" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[PepFlag]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">3</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[Segment]" cachedDataType="wstr" cachedLength="20" cachedName="Segment" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Segment]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">3</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">3</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]">
+                          <properties>
+                            <property dataType="System.Int32" typeConverter="ColumnType" name="ColumnType">4</property>
+                          </properties>
+                        </inputColumn>
+                      </inputColumns>
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Unchanged Output]" exclusionGroup="1" name="Unchanged Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[New Output]" exclusionGroup="1" name="New Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Fixed Attribute Output]" exclusionGroup="1" name="Fixed Attribute Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Changing Attribute Updates Output]" exclusionGroup="1" name="Changing Attribute Updates Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Historical Attribute Inserts Output]" exclusionGroup="1" name="Historical Attribute Inserts Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Inferred Member Updates Output]" exclusionGroup="1" name="Inferred Member Updates Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]">
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update" componentClassID="Microsoft.OLEDBCommand" description="OLE DB Command" name="OLE CMD Type1 Update" version="2" usesDispositions="true">
+                  <properties>
+                    <property dataType="System.Int32" name="CommandTimeout">0</property>
+                    <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">UPDATE dw.DimCustomer SET FullName = ?, Email = ?, TaxIdMasked = ? WHERE CustomerNumber = ?</property>
+                    <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                  </properties>
+                  <connections>
+                    <connection refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[FinanceDW]" connectionManagerRefId="Package.ConnectionManagers[FinanceDW]" name="OleDbConnection" />
+                  </connections>
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input]" name="OLE DB Command Input">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].Columns[FullName]" cachedDataType="wstr" cachedLength="131" cachedName="FullName" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_0]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[FullName]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].Columns[Email]" cachedDataType="wstr" cachedLength="256" cachedName="Email" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_1]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Email]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].Columns[TaxIdMasked]" cachedDataType="wstr" cachedLength="11" cachedName="TaxIdMasked" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_2]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[TaxIdMasked]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_3]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" />
+                      </inputColumns>
+                      <externalMetadataColumns isUsed="True">
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_0]" dataType="wstr" length="131" name="Param_0" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_1]" dataType="wstr" length="256" name="Param_1" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_2]" dataType="wstr" length="11" name="Param_2" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input].ExternalColumns[Param_3]" dataType="wstr" length="20" name="Param_3" />
+                      </externalMetadataColumns>
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Outputs[OLE DB Command Output]" exclusionGroup="1" name="OLE DB Command Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Outputs[OLE DB Command Error Output]" isErrorOut="true" name="OLE DB Command Error Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Outputs[OLE DB Command Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Outputs[OLE DB Command Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Outputs[OLE DB Command Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Outputs[OLE DB Command Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Expire Date" version="0" usesDispositions="true">
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Inputs[Derived Column Input]" name="Derived Column Input">
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Inputs[Derived Column Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Output].Columns[ExpiryDate]" dataType="dbTimeStamp" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Output].Columns[ExpiryDate]" name="ExpiryDate">
+                          <properties>
+                            <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">(DT_DBTIMESTAMP)@[$Package::BusinessDate]</property>
+                            <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">(DT_DBTIMESTAMP)@[$Package::BusinessDate]</property>
+                          </properties>
+                        </outputColumn>
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Inputs[Derived Column Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row" componentClassID="Microsoft.OLEDBCommand" description="OLE DB Command" name="OLE CMD Expire Current Row" version="2" usesDispositions="true">
+                  <properties>
+                    <property dataType="System.Int32" name="CommandTimeout">0</property>
+                    <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">UPDATE dw.DimCustomer SET IsCurrent = 0, EffectiveTo = ? WHERE CustomerNumber = ? AND IsCurrent = 1</property>
+                    <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                  </properties>
+                  <connections>
+                    <connection refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[FinanceDW]" connectionManagerRefId="Package.ConnectionManagers[FinanceDW]" name="OleDbConnection" />
+                  </connections>
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input]" name="OLE DB Command Input">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input].Columns[ExpiryDate]" cachedDataType="dbTimeStamp" cachedName="ExpiryDate" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input].ExternalColumns[Param_0]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Output].Columns[ExpiryDate]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input].ExternalColumns[Param_1]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]" />
+                      </inputColumns>
+                      <externalMetadataColumns isUsed="True">
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input].ExternalColumns[Param_0]" dataType="dbTimeStamp" name="Param_0" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input].ExternalColumns[Param_1]" dataType="wstr" length="20" name="Param_1" />
+                      </externalMetadataColumns>
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Output]" exclusionGroup="1" name="OLE DB Command Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input]">
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Error Output]" isErrorOut="true" name="OLE DB Command Error Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical" componentClassID="Microsoft.UnionAll" description="Union All" name="UALL New And Historical" version="0">
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1]" name="Union All Input 1">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CustomerNumber]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[FullName]" cachedDataType="wstr" cachedLength="131" cachedName="FullName" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[FullName]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[FullName]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[DateOfBirth]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[TaxIdMasked]" cachedDataType="wstr" cachedLength="11" cachedName="TaxIdMasked" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[TaxIdMasked]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[TaxIdMasked]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[Email]" cachedDataType="wstr" cachedLength="256" cachedName="Email" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Email]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Email]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[Segment]" cachedDataType="wstr" cachedLength="20" cachedName="Segment" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Segment]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Segment]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[KycRiskRating]" cachedDataType="wstr" cachedLength="10" cachedName="KycRiskRating" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[KycRiskRating]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[KycRiskRating]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[PepFlag]" cachedDataType="bool" cachedName="PepFlag" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[PepFlag]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[PepFlag]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CountryOfResidence]}</property>
+                          </properties>
+                        </inputColumn>
+                      </inputColumns>
+                      <externalMetadataColumns />
+                    </input>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2]" name="Union All Input 2">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CustomerNumber]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CustomerNumber]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[FullName]" cachedDataType="wstr" cachedLength="131" cachedName="FullName" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[FullName]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[FullName]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[DateOfBirth]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[DateOfBirth]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[TaxIdMasked]" cachedDataType="wstr" cachedLength="11" cachedName="TaxIdMasked" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output].Columns[TaxIdMasked]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[TaxIdMasked]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[Email]" cachedDataType="wstr" cachedLength="256" cachedName="Email" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Email]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Email]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[Segment]" cachedDataType="wstr" cachedLength="20" cachedName="Segment" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[Segment]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Segment]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[KycRiskRating]" cachedDataType="wstr" cachedLength="10" cachedName="KycRiskRating" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[KycRiskRating]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[KycRiskRating]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[PepFlag]" cachedDataType="bool" cachedName="PepFlag" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[PepFlag]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[PepFlag]}</property>
+                          </properties>
+                        </inputColumn>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output].Columns[CountryOfResidence]">
+                          <properties>
+                            <property dataType="System.Int32" containsID="true" name="OutputColumnLineageID">#{Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CountryOfResidence]}</property>
+                          </properties>
+                        </inputColumn>
+                      </inputColumns>
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1]" name="Union All Output 1">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CustomerNumber]" dataType="wstr" length="20" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CustomerNumber]" name="CustomerNumber" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[FullName]" dataType="wstr" length="131" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[FullName]" name="FullName" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[DateOfBirth]" dataType="dbDate" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[DateOfBirth]" name="DateOfBirth" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[TaxIdMasked]" dataType="wstr" length="11" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[TaxIdMasked]" name="TaxIdMasked" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Email]" dataType="wstr" length="256" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Email]" name="Email" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Segment]" dataType="wstr" length="20" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Segment]" name="Segment" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[KycRiskRating]" dataType="wstr" length="10" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[KycRiskRating]" name="KycRiskRating" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[PepFlag]" dataType="bool" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[PepFlag]" name="PepFlag" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CountryOfResidence]" dataType="wstr" length="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CountryOfResidence]" name="CountryOfResidence" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Effective Dates" version="0" usesDispositions="true">
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Inputs[Derived Column Input]" name="Derived Column Input">
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Inputs[Derived Column Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output].Columns[EffectiveFrom]" dataType="dbTimeStamp" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output].Columns[EffectiveFrom]" name="EffectiveFrom">
+                          <properties>
+                            <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">(DT_DBTIMESTAMP)@[$Package::BusinessDate]</property>
+                            <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">(DT_DBTIMESTAMP)@[$Package::BusinessDate]</property>
+                          </properties>
+                        </outputColumn>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output].Columns[IsCurrent]" dataType="bool" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output].Columns[IsCurrent]" name="IsCurrent">
+                          <properties>
+                            <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">(DT_BOOL)1</property>
+                            <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">(DT_BOOL)1</property>
+                          </properties>
+                        </outputColumn>
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Inputs[Derived Column Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\RC Rows Inserted" componentClassID="Microsoft.RowCount" description="Row Count" name="RC Rows Inserted" version="0">
+                  <properties>
+                    <property dataType="System.String" name="VariableName">User::RowsLoaded</property>
+                  </properties>
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\RC Rows Inserted.Inputs[Row Count Input 1]" name="Row Count Input 1">
+                      <externalMetadataColumns />
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\RC Rows Inserted.Outputs[Row Count Output 1]" name="Row Count Output 1" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\RC Rows Inserted.Inputs[Row Count Input 1]">
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+                <component refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST DimCustomer Insert" version="4" usesDispositions="true">
+                  <properties>
+                    <property dataType="System.Int32" name="CommandTimeout">0</property>
+                    <property dataType="System.String" name="OpenRowset">[dw].[DimCustomer]</property>
+                    <property dataType="System.String" name="OpenRowsetVariable" />
+                    <property dataType="System.String" name="SqlCommand" />
+                    <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                    <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                    <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                    <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                    <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                    <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                    <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+                  </properties>
+                  <connections>
+                    <connection refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[FinanceDW]" connectionManagerRefId="Package.ConnectionManagers[FinanceDW]" name="OleDbConnection" />
+                  </connections>
+                  <inputs>
+                    <input refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                      <inputColumns>
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[CustomerNumber]" cachedDataType="wstr" cachedLength="20" cachedName="CustomerNumber" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[CustomerNumber]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CustomerNumber]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[FullName]" cachedDataType="wstr" cachedLength="131" cachedName="FullName" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[FullName]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[FullName]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[DateOfBirth]" cachedDataType="dbDate" cachedName="DateOfBirth" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[DateOfBirth]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[DateOfBirth]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[TaxIdMasked]" cachedDataType="wstr" cachedLength="11" cachedName="TaxIdMasked" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[TaxIdMasked]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[TaxIdMasked]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[Email]" cachedDataType="wstr" cachedLength="256" cachedName="Email" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[Email]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Email]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[Segment]" cachedDataType="wstr" cachedLength="20" cachedName="Segment" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[Segment]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[Segment]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[KycRiskRating]" cachedDataType="wstr" cachedLength="10" cachedName="KycRiskRating" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[KycRiskRating]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[KycRiskRating]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[PepFlag]" cachedDataType="bool" cachedName="PepFlag" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[PepFlag]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[PepFlag]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[CountryOfResidence]" cachedDataType="wstr" cachedLength="2" cachedName="CountryOfResidence" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[CountryOfResidence]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1].Columns[CountryOfResidence]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[EffectiveFrom]" cachedDataType="dbTimeStamp" cachedName="EffectiveFrom" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[EffectiveFrom]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output].Columns[EffectiveFrom]" />
+                        <inputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].Columns[IsCurrent]" cachedDataType="bool" cachedName="IsCurrent" externalMetadataColumnId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[IsCurrent]" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output].Columns[IsCurrent]" />
+                      </inputColumns>
+                      <externalMetadataColumns isUsed="True">
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[CustomerNumber]" dataType="wstr" length="20" name="CustomerNumber" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[FullName]" dataType="wstr" length="131" name="FullName" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[DateOfBirth]" dataType="dbDate" name="DateOfBirth" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[TaxIdMasked]" dataType="wstr" length="11" name="TaxIdMasked" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[Email]" dataType="wstr" length="256" name="Email" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[Segment]" dataType="wstr" length="20" name="Segment" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[KycRiskRating]" dataType="wstr" length="10" name="KycRiskRating" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[PepFlag]" dataType="bool" name="PepFlag" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[CountryOfResidence]" dataType="wstr" length="2" name="CountryOfResidence" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[EffectiveFrom]" dataType="dbTimeStamp" name="EffectiveFrom" />
+                        <externalMetadataColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input].ExternalColumns[IsCurrent]" dataType="bool" name="IsCurrent" />
+                      </externalMetadataColumns>
+                    </input>
+                  </inputs>
+                  <outputs>
+                    <output refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input]">
+                      <outputColumns>
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                        <outputColumn refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                      </outputColumns>
+                      <externalMetadataColumns />
+                    </output>
+                  </outputs>
+                </component>
+              </components>
+              <paths>
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[OLE DB Source Output]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Inputs[Derived Column Input]" name="OLE DB Source Output" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE SRC CRM Customers.Outputs[OLE DB Source Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Derived Column Output]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Inputs[Slowly Changing Dimension Input]" name="Derived Column Output" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER PII Masking.Outputs[Derived Column Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Changing Attribute Updates Output]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Type1 Update.Inputs[OLE DB Command Input]" name="Changing Attribute Updates Output" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Changing Attribute Updates Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Historical Attribute Inserts Output]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Inputs[Derived Column Input]" name="Historical Attribute Inserts Output" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[Historical Attribute Inserts Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Derived Column Output 1]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Inputs[OLE DB Command Input]" name="Derived Column Output 1" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Expire Date.Outputs[Derived Column Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[New Output]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 1]" name="New Output" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\SCD DimCustomer.Outputs[New Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[OLE DB Command Output]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Inputs[Union All Input 2]" name="OLE DB Command Output" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE CMD Expire Current Row.Outputs[OLE DB Command Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Union All Output 1]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Inputs[Derived Column Input]" name="Union All Output 1" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\UALL New And Historical.Outputs[Union All Output 1]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Derived Column Output 2]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\RC Rows Inserted.Inputs[Row Count Input 1]" name="Derived Column Output 2" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\DER Effective Dates.Outputs[Derived Column Output]" />
+                <path refId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2.Paths[Row Count Output 1]" endId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\OLE DST DimCustomer Insert.Inputs[OLE DB Destination Input]" name="Row Count Output 1" startId="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2\RC Rows Inserted.Outputs[Row Count Output 1]" />
+              </paths>
+            </pipeline>
+          </DTS:ObjectData>
+        </DTS:Executable>
+        <DTS:Executable DTS:refId="Package\SEQ Load DimCustomer\SQL KYC Data Quality Metrics" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{943DFC5E-5FF8-5959-8E8F-41BC0F999139}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL KYC Data Quality Metrics" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+          <DTS:Variables />
+          <DTS:ObjectData>
+            <SQLTask:SqlTaskData SQLTask:Connection="{DA3478ED-F3A7-5DFD-B6F7-A231C54654DC}" SQLTask:SqlStatementSource="INSERT INTO dq.MetricResult (BatchId, MetricName, MetricValue, Threshold, Passed)&#10;SELECT ?, 'DimCustomer.CurrentRowsWithoutRiskRating', COUNT(*), 0, CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END&#10;FROM dw.DimCustomer WHERE IsCurrent = 1 AND KycRiskRating IS NULL&#10;UNION ALL&#10;SELECT ?, 'DimCustomer.DuplicateCurrentRows', COUNT(*), 0, CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END&#10;FROM (SELECT CustomerNumber FROM dw.DimCustomer WHERE IsCurrent = 1 GROUP BY CustomerNumber HAVING COUNT(*) &gt; 1) d;">
+              <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+              <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+            </SQLTask:SqlTaskData>
+          </DTS:ObjectData>
+        </DTS:Executable>
+      </DTS:Executables>
+      <DTS:PrecedenceConstraints>
+        <DTS:PrecedenceConstraint DTS:refId="Package\SEQ Load DimCustomer.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{ABF0A2D7-15A4-54C0-9261-5977071F7F3D}" DTS:From="Package\SEQ Load DimCustomer\DFT DimCustomer SCD2" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\SEQ Load DimCustomer\SQL KYC Data Quality Metrics" />
+      </DTS:PrecedenceConstraints>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Complete Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Close batch with status Succeeded" DTS:DTSID="{D3146AE1-D6AD-5486-922D-6454D375F70F}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Complete Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{C8449056-95B1-50AC-829A-D7B6C357E537}" SQLTask:SqlStatementSource="EXEC etl.usp_EndBatch @BatchId = ?, @Status = 'Succeeded', @RowsExtracted = ?, @RowsLoaded = ?, @RowsRejected = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::RowsExtracted" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="User::RowsLoaded" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::RowsRejected" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{0AD5EB7A-DECC-51A9-8750-CF78A3CA138F}" DTS:From="Package\SQL Start Batch" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\SEQ Load DimCustomer" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 1]" DTS:CreationName="" DTS:DTSID="{2EE6B0F2-C36E-5B0B-BC09-5D0E12A2DAEB}" DTS:From="Package\SEQ Load DimCustomer" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 1" DTS:To="Package\SQL Complete Batch" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>

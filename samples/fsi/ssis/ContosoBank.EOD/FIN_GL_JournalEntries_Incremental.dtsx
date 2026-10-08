@@ -1,0 +1,301 @@
+<?xml version="1.0"?>
+<DTS:Executable xmlns:DTS="www.microsoft.com/SqlServer/Dts" xmlns:SQLTask="www.microsoft.com/sqlserver/dts/tasks/sqltask" DTS:refId="Package" DTS:CreationDate="1/15/2026 9:00:00 AM" DTS:CreationName="Microsoft.Package" DTS:CreatorComputerName="CONTOSO-ETLDEV01" DTS:CreatorName="CONTOSO\svc_ssis_dev" DTS:Description="Watermark-based incremental extract of general ledger journal lines from core banking into dw.FactGLJournalLine." DTS:DTSID="{9DE9F738-A73F-5BD5-A9DA-2C53F65C98CA}" DTS:ExecutableType="Microsoft.Package" DTS:LastModifiedProductVersion="15.0.2000.180" DTS:LocaleID="1033" DTS:ObjectName="FIN_GL_JournalEntries_Incremental" DTS:PackageType="5" DTS:ProtectionLevel="0" DTS:VersionBuild="12" DTS:VersionGUID="{DF4F03E4-E5B6-5C2C-90FB-7D1E38C674A9}">
+  <DTS:Property DTS:Name="PackageFormatVersion">8</DTS:Property>
+  <DTS:ConnectionManagers>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[CoreBanking]" DTS:CreationName="OLEDB" DTS:DTSID="{D5667C95-6A73-51E4-8649-828E82C6568D}" DTS:ObjectName="CoreBanking">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::CoreBankingConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=CORESQL01.contoso.local;Initial Catalog=CoreBanking;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-FIN_GL_JournalEntries_Incremental-CoreBanking;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[FinanceDW]" DTS:CreationName="OLEDB" DTS:DTSID="{B306BF2A-3DE2-5E14-B4B6-64F9E3B5E504}" DTS:ObjectName="FinanceDW">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::FinanceDWConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=DWSQL01.contoso.local;Initial Catalog=FinanceDW;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-FIN_GL_JournalEntries_Incremental-FinanceDW;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+    <DTS:ConnectionManager DTS:refId="Package.ConnectionManagers[ETLControl]" DTS:CreationName="OLEDB" DTS:DTSID="{892350C0-0836-5144-9EE7-CACE78F6A90E}" DTS:ObjectName="ETLControl">
+      <DTS:PropertyExpression DTS:Name="ConnectionString">@[$Project::ETLControlConnStr]</DTS:PropertyExpression>
+      <DTS:ObjectData>
+        <DTS:ConnectionManager DTS:ConnectionString="Data Source=ETLSQL01.contoso.local;Initial Catalog=ETLControl;Provider=MSOLEDBSQL.1;Integrated Security=SSPI;Application Name=SSIS-FIN_GL_JournalEntries_Incremental-ETLControl;Auto Translate=False;" />
+      </DTS:ObjectData>
+    </DTS:ConnectionManager>
+  </DTS:ConnectionManagers>
+  <DTS:Variables>
+    <DTS:Variable DTS:CreationName="" DTS:Description="ETLControl batch id" DTS:DTSID="{8215C327-EE2B-5618-B98D-072005179D36}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="BatchId">
+      <DTS:VariableValue DTS:DataType="20">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{F54596FE-4DCC-5D1D-8641-053F3030BE7E}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsExtracted">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{DA16ED42-0092-5684-A281-97FB87EA79F1}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsLoaded">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{060D23A1-AFF8-5DF0-9B0E-D088AC44085A}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="RowsRejected">
+      <DTS:VariableValue DTS:DataType="3">0</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{67883622-ADD4-571B-9906-984A5FBD7AF8}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="LastWatermarkUtc">
+      <DTS:VariableValue DTS:DataType="7">1/1/2026 12:00:00 AM</DTS:VariableValue>
+    </DTS:Variable>
+    <DTS:Variable DTS:CreationName="" DTS:DTSID="{177C1C6E-46D8-59F7-94A6-1E4EF83E067D}" DTS:IncludeInDebugDump="2345" DTS:Namespace="User" DTS:ObjectName="NewWatermarkUtc">
+      <DTS:VariableValue DTS:DataType="7">1/1/2026 12:00:00 AM</DTS:VariableValue>
+    </DTS:Variable>
+  </DTS:Variables>
+  <DTS:Executables>
+    <DTS:Executable DTS:refId="Package\SQL Get Watermark" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{7AF20160-F61D-53F1-A414-4F2861F051E2}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Get Watermark" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{892350C0-0836-5144-9EE7-CACE78F6A90E}" SQLTask:SqlStatementSource="SELECT LastWatermarkUtc, SYSUTCDATETIME() AS NewWatermarkUtc FROM etl.Watermark WHERE SourceTable = 'gl.JournalLine';" SQLTask:ResultType="ResultSetType_SingleRow">
+          <SQLTask:ResultBinding SQLTask:ResultName="LastWatermarkUtc" SQLTask:DtsVariableName="User::LastWatermarkUtc" />
+          <SQLTask:ResultBinding SQLTask:ResultName="NewWatermarkUtc" SQLTask:DtsVariableName="User::NewWatermarkUtc" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Start Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Register GL journal incremental run in ETLControl.etl.Batch" DTS:DTSID="{B19E1F80-A05B-5219-B813-70962DE1C60A}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Start Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{892350C0-0836-5144-9EE7-CACE78F6A90E}" SQLTask:SqlStatementSource="EXEC etl.usp_StartBatch @ProcessName = ?, @PackageName = ?, @ExecutionId = ?, @BatchId = ? OUTPUT;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="System::PackageName" SQLTask:ParameterDirection="Input" SQLTask:DataType="130" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="System::ServerExecutionID" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Output" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Truncate Staging" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{E41D6369-983D-5F79-8EA4-2C6AD9BC4DB5}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Truncate Staging" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{B306BF2A-3DE2-5E14-B4B6-64F9E3B5E504}" SQLTask:SqlStatementSource="TRUNCATE TABLE stg.GLJournalLine;" />
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\DFT Extract Journal Lines" DTS:CreationName="Microsoft.Pipeline" DTS:Description="Data Flow Task" DTS:DTSID="{71C0B8CB-EA22-5C4E-A63B-E4BDDB2F8C7C}" DTS:ExecutableType="Microsoft.Pipeline" DTS:LocaleID="-1" DTS:ObjectName="DFT Extract Journal Lines" DTS:TaskContact="Performs high-performance data extraction, transformation and loading;Microsoft Corporation; Microsoft SQL Server; (C) Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <pipeline version="1">
+          <components>
+            <component refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines" componentClassID="Microsoft.OLEDBSource" description="OLE DB Source" name="OLE SRC Journal Lines" version="7" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset" />
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" UITypeEditor="Microsoft.DataTransformationServices.Controls.ModalMultilineStringEditor" name="SqlCommand">SELECT jh.JournalId, jl.LineNumber, jh.PostingDate, jh.JournalSource, jl.GlAccount, jl.CostCenter,
+       jl.LegalEntity, jl.CurrencyCode, jl.DebitAmount, jl.CreditAmount, jl.ModifiedUtc
+FROM gl.JournalHeader jh WITH (NOLOCK)
+JOIN gl.JournalLine jl WITH (NOLOCK) ON jl.JournalId = jh.JournalId
+WHERE jl.ModifiedUtc &gt; ? AND jl.ModifiedUtc &lt;= ? AND jh.Status = 'POSTED'</property>
+                <property dataType="System.String" name="SqlCommandVariable" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">2</property>
+                <property dataType="System.String" name="ParameterMapping">"Parameter0:Input",{67883622-ADD4-571B-9906-984A5FBD7AF8};"Parameter1:Input",{177C1C6E-46D8-59F7-94A6-1E4EF83E067D};</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[CoreBanking]" connectionManagerRefId="Package.ConnectionManagers[CoreBanking]" name="OleDbConnection" />
+              </connections>
+              <outputs>
+                <output refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output]" name="OLE DB Source Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[JournalId]" dataType="i8" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[JournalId]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[JournalId]" name="JournalId" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[LineNumber]" dataType="i4" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[LineNumber]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[LineNumber]" name="LineNumber" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[PostingDate]" dataType="dbDate" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[PostingDate]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[PostingDate]" name="PostingDate" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[JournalSource]" dataType="wstr" length="20" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[JournalSource]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[JournalSource]" name="JournalSource" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[GlAccount]" dataType="wstr" length="20" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[GlAccount]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[GlAccount]" name="GlAccount" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CostCenter]" dataType="wstr" length="10" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[CostCenter]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CostCenter]" name="CostCenter" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[LegalEntity]" dataType="wstr" length="10" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[LegalEntity]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[LegalEntity]" name="LegalEntity" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CurrencyCode]" dataType="wstr" length="3" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[CurrencyCode]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CurrencyCode]" name="CurrencyCode" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[DebitAmount]" dataType="numeric" precision="19" scale="4" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[DebitAmount]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[DebitAmount]" name="DebitAmount" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]" dataType="numeric" precision="19" scale="4" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[CreditAmount]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]" name="CreditAmount" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[ModifiedUtc]" dataType="dbTimeStamp" errorOrTruncationOperation="Conversion" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[ModifiedUtc]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[ModifiedUtc]" name="ModifiedUtc" />
+                  </outputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[JournalId]" dataType="i8" name="JournalId" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[LineNumber]" dataType="i4" name="LineNumber" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[PostingDate]" dataType="dbDate" name="PostingDate" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[JournalSource]" dataType="wstr" length="20" name="JournalSource" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[GlAccount]" dataType="wstr" length="20" name="GlAccount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[CostCenter]" dataType="wstr" length="10" name="CostCenter" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[LegalEntity]" dataType="wstr" length="10" name="LegalEntity" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[CurrencyCode]" dataType="wstr" length="3" name="CurrencyCode" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[DebitAmount]" dataType="numeric" precision="19" scale="4" name="DebitAmount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[CreditAmount]" dataType="numeric" precision="19" scale="4" name="CreditAmount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].ExternalColumns[ModifiedUtc]" dataType="dbTimeStamp" name="ModifiedUtc" />
+                  </externalMetadataColumns>
+                </output>
+                <output refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Error Output]" isErrorOut="true" name="OLE DB Source Error Output">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Extract Journal Lines\DER Audit Columns" componentClassID="Microsoft.DerivedColumn" description="Derived Column" name="DER Audit Columns" version="0" usesDispositions="true">
+              <inputs>
+                <input refId="Package\DFT Extract Journal Lines\DER Audit Columns.Inputs[Derived Column Input]" name="Derived Column Input">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Inputs[Derived Column Input].Columns[DebitAmount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="4" cachedName="DebitAmount" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[DebitAmount]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Inputs[Derived Column Input].Columns[CreditAmount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="4" cachedName="CreditAmount" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]" />
+                  </inputColumns>
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output]" exclusionGroup="0" name="Derived Column Output" synchronousInputId="Package\DFT Extract Journal Lines\DER Audit Columns.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[NetAmount]" dataType="numeric" precision="19" scale="4" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[NetAmount]" name="NetAmount">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">ISNULL(#{Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[DebitAmount]}) ? (DT_NUMERIC,19,4)0 - #{Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]} : #{Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[DebitAmount]} - (ISNULL(#{Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]}) ? (DT_NUMERIC,19,4)0 : #{Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]})</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">ISNULL([DebitAmount]) ? (DT_NUMERIC,19,4)0 - [CreditAmount] : [DebitAmount] - (ISNULL([CreditAmount]) ? (DT_NUMERIC,19,4)0 : [CreditAmount])</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[BatchId]" dataType="i8" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[BatchId]" name="BatchId">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">@[User::BatchId]</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">@[User::BatchId]</property>
+                      </properties>
+                    </outputColumn>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[LoadDtsUtc]" dataType="dbTimeStamp" errorOrTruncationOperation="Computation" errorRowDisposition="FailComponent" truncationRowDisposition="FailComponent" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[LoadDtsUtc]" name="LoadDtsUtc">
+                      <properties>
+                        <property dataType="System.String" containsID="true" description="Derived Column Expression" name="Expression">(DT_DBTIMESTAMP)GETUTCDATE()</property>
+                        <property dataType="System.String" containsID="true" description="Derived Column Friendly Expression" expressionType="Notify" name="FriendlyExpression">(DT_DBTIMESTAMP)GETUTCDATE()</property>
+                      </properties>
+                    </outputColumn>
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+                <output refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Error Output]" isErrorOut="true" name="Derived Column Error Output" synchronousInputId="Package\DFT Extract Journal Lines\DER Audit Columns.Inputs[Derived Column Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Extract Journal Lines\RC Rows Extracted" componentClassID="Microsoft.RowCount" description="Row Count" name="RC Rows Extracted" version="0">
+              <properties>
+                <property dataType="System.String" name="VariableName">User::RowsExtracted</property>
+              </properties>
+              <inputs>
+                <input refId="Package\DFT Extract Journal Lines\RC Rows Extracted.Inputs[Row Count Input 1]" name="Row Count Input 1">
+                  <externalMetadataColumns />
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Extract Journal Lines\RC Rows Extracted.Outputs[Row Count Output 1]" name="Row Count Output 1" synchronousInputId="Package\DFT Extract Journal Lines\RC Rows Extracted.Inputs[Row Count Input 1]">
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+            <component refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine" componentClassID="Microsoft.OLEDBDestination" description="OLE DB Destination" name="OLE DST stg GLJournalLine" version="4" usesDispositions="true">
+              <properties>
+                <property dataType="System.Int32" name="CommandTimeout">0</property>
+                <property dataType="System.String" name="OpenRowset">[stg].[GLJournalLine]</property>
+                <property dataType="System.String" name="OpenRowsetVariable" />
+                <property dataType="System.String" name="SqlCommand" />
+                <property dataType="System.Int32" name="DefaultCodePage">1252</property>
+                <property dataType="System.Boolean" name="AlwaysUseDefaultCodePage">false</property>
+                <property dataType="System.Int32" typeConverter="AccessMode" name="AccessMode">3</property>
+                <property dataType="System.Boolean" name="FastLoadKeepIdentity">false</property>
+                <property dataType="System.Boolean" name="FastLoadKeepNulls">false</property>
+                <property dataType="System.String" name="FastLoadOptions">TABLOCK,CHECK_CONSTRAINTS</property>
+                <property dataType="System.Int32" name="FastLoadMaxInsertCommitSize">2147483647</property>
+              </properties>
+              <connections>
+                <connection refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Connections[OleDbConnection]" connectionManagerID="Package.ConnectionManagers[FinanceDW]" connectionManagerRefId="Package.ConnectionManagers[FinanceDW]" name="OleDbConnection" />
+              </connections>
+              <inputs>
+                <input refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input]" name="OLE DB Destination Input" hasSideEffects="true">
+                  <inputColumns>
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[JournalId]" cachedDataType="i8" cachedName="JournalId" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[JournalId]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[JournalId]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[LineNumber]" cachedDataType="i4" cachedName="LineNumber" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[LineNumber]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[LineNumber]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[PostingDate]" cachedDataType="dbDate" cachedName="PostingDate" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[PostingDate]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[PostingDate]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[JournalSource]" cachedDataType="wstr" cachedLength="20" cachedName="JournalSource" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[JournalSource]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[JournalSource]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[GlAccount]" cachedDataType="wstr" cachedLength="20" cachedName="GlAccount" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[GlAccount]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[GlAccount]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[CostCenter]" cachedDataType="wstr" cachedLength="10" cachedName="CostCenter" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[CostCenter]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CostCenter]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[LegalEntity]" cachedDataType="wstr" cachedLength="10" cachedName="LegalEntity" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[LegalEntity]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[LegalEntity]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[CurrencyCode]" cachedDataType="wstr" cachedLength="3" cachedName="CurrencyCode" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[CurrencyCode]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CurrencyCode]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[DebitAmount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="4" cachedName="DebitAmount" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[DebitAmount]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[DebitAmount]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[CreditAmount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="4" cachedName="CreditAmount" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[CreditAmount]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[CreditAmount]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[ModifiedUtc]" cachedDataType="dbTimeStamp" cachedName="ModifiedUtc" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[ModifiedUtc]" lineageId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output].Columns[ModifiedUtc]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[NetAmount]" cachedDataType="numeric" cachedPrecision="19" cachedScale="4" cachedName="NetAmount" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[NetAmount]" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[NetAmount]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[BatchId]" cachedDataType="i8" cachedName="BatchId" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[BatchId]" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[BatchId]" />
+                    <inputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].Columns[LoadDtsUtc]" cachedDataType="dbTimeStamp" cachedName="LoadDtsUtc" externalMetadataColumnId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[LoadDtsUtc]" lineageId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output].Columns[LoadDtsUtc]" />
+                  </inputColumns>
+                  <externalMetadataColumns isUsed="True">
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[JournalId]" dataType="i8" name="JournalId" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[LineNumber]" dataType="i4" name="LineNumber" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[PostingDate]" dataType="dbDate" name="PostingDate" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[JournalSource]" dataType="wstr" length="20" name="JournalSource" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[GlAccount]" dataType="wstr" length="20" name="GlAccount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[CostCenter]" dataType="wstr" length="10" name="CostCenter" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[LegalEntity]" dataType="wstr" length="10" name="LegalEntity" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[CurrencyCode]" dataType="wstr" length="3" name="CurrencyCode" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[DebitAmount]" dataType="numeric" precision="19" scale="4" name="DebitAmount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[CreditAmount]" dataType="numeric" precision="19" scale="4" name="CreditAmount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[ModifiedUtc]" dataType="dbTimeStamp" name="ModifiedUtc" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[NetAmount]" dataType="numeric" precision="19" scale="4" name="NetAmount" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[BatchId]" dataType="i8" name="BatchId" />
+                    <externalMetadataColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input].ExternalColumns[LoadDtsUtc]" dataType="dbTimeStamp" name="LoadDtsUtc" />
+                  </externalMetadataColumns>
+                </input>
+              </inputs>
+              <outputs>
+                <output refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Outputs[OLE DB Destination Error Output]" isErrorOut="true" name="OLE DB Destination Error Output" synchronousInputId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input]">
+                  <outputColumns>
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" dataType="i4" specialFlags="1" lineageId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Outputs[OLE DB Destination Error Output].Columns[ErrorCode]" name="ErrorCode" />
+                    <outputColumn refId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" dataType="i4" specialFlags="2" lineageId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Outputs[OLE DB Destination Error Output].Columns[ErrorColumn]" name="ErrorColumn" />
+                  </outputColumns>
+                  <externalMetadataColumns />
+                </output>
+              </outputs>
+            </component>
+          </components>
+          <paths>
+            <path refId="Package\DFT Extract Journal Lines.Paths[OLE DB Source Output]" endId="Package\DFT Extract Journal Lines\DER Audit Columns.Inputs[Derived Column Input]" name="OLE DB Source Output" startId="Package\DFT Extract Journal Lines\OLE SRC Journal Lines.Outputs[OLE DB Source Output]" />
+            <path refId="Package\DFT Extract Journal Lines.Paths[Derived Column Output]" endId="Package\DFT Extract Journal Lines\RC Rows Extracted.Inputs[Row Count Input 1]" name="Derived Column Output" startId="Package\DFT Extract Journal Lines\DER Audit Columns.Outputs[Derived Column Output]" />
+            <path refId="Package\DFT Extract Journal Lines.Paths[Row Count Output 1]" endId="Package\DFT Extract Journal Lines\OLE DST stg GLJournalLine.Inputs[OLE DB Destination Input]" name="Row Count Output 1" startId="Package\DFT Extract Journal Lines\RC Rows Extracted.Outputs[Row Count Output 1]" />
+          </paths>
+        </pipeline>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Merge FactGLJournalLine" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="MERGE on (JournalId, LineNumber); late-arriving reversals update NetAmount" DTS:DTSID="{B5403851-0581-5FEE-940E-48F9D4B5EE21}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Merge FactGLJournalLine" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{B306BF2A-3DE2-5E14-B4B6-64F9E3B5E504}" SQLTask:SqlStatementSource="EXEC dw.usp_MergeFactGLJournalLine @BatchId = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Update Watermark" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Execute SQL Task" DTS:DTSID="{A69424BB-D220-52C5-A4C4-2E3B0F302EB4}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Update Watermark" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{892350C0-0836-5144-9EE7-CACE78F6A90E}" SQLTask:SqlStatementSource="UPDATE etl.Watermark SET LastWatermarkUtc = ?, UpdatedBatchId = ? WHERE SourceTable = 'gl.JournalLine';">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::NewWatermarkUtc" SQLTask:ParameterDirection="Input" SQLTask:DataType="135" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+    <DTS:Executable DTS:refId="Package\SQL Complete Batch" DTS:CreationName="Microsoft.ExecuteSQLTask" DTS:Description="Close batch with status Succeeded" DTS:DTSID="{926B24CF-557B-5C72-AC11-6FD4150188F7}" DTS:ExecutableType="Microsoft.ExecuteSQLTask" DTS:LocaleID="-1" DTS:ObjectName="SQL Complete Batch" DTS:TaskContact="Execute SQL Task; Microsoft Corporation; SQL Server 2019; © 2019 Microsoft Corporation; All Rights Reserved;http://www.microsoft.com/sql/support/default.asp;1" DTS:ThreadHint="0">
+      <DTS:Variables />
+      <DTS:ObjectData>
+        <SQLTask:SqlTaskData SQLTask:Connection="{892350C0-0836-5144-9EE7-CACE78F6A90E}" SQLTask:SqlStatementSource="EXEC etl.usp_EndBatch @BatchId = ?, @Status = 'Succeeded', @RowsExtracted = ?, @RowsLoaded = ?, @RowsRejected = ?;">
+          <SQLTask:ParameterBinding SQLTask:ParameterName="0" SQLTask:DtsVariableName="User::BatchId" SQLTask:ParameterDirection="Input" SQLTask:DataType="20" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="1" SQLTask:DtsVariableName="User::RowsExtracted" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="2" SQLTask:DtsVariableName="User::RowsLoaded" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+          <SQLTask:ParameterBinding SQLTask:ParameterName="3" SQLTask:DtsVariableName="User::RowsRejected" SQLTask:ParameterDirection="Input" SQLTask:DataType="3" SQLTask:ParameterSize="-1" />
+        </SQLTask:SqlTaskData>
+      </DTS:ObjectData>
+    </DTS:Executable>
+  </DTS:Executables>
+  <DTS:PrecedenceConstraints>
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint]" DTS:CreationName="" DTS:DTSID="{083BCF48-D8B0-52FA-9AC9-E9669DAA771C}" DTS:From="Package\SQL Get Watermark" DTS:LogicalAnd="True" DTS:ObjectName="Constraint" DTS:To="Package\SQL Start Batch" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 1]" DTS:CreationName="" DTS:DTSID="{48655795-3587-5185-9E69-0FDD90037EB6}" DTS:From="Package\SQL Start Batch" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 1" DTS:To="Package\SQL Truncate Staging" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 2]" DTS:CreationName="" DTS:DTSID="{8F5F28A3-7F48-5FEC-A629-74595EE1976A}" DTS:From="Package\SQL Truncate Staging" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 2" DTS:To="Package\DFT Extract Journal Lines" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 3]" DTS:CreationName="" DTS:DTSID="{5C38FC03-C531-5EFC-9A3B-D7887E53054B}" DTS:EvalOp="3" DTS:Expression="@[User::RowsExtracted] &gt; 0" DTS:From="Package\DFT Extract Journal Lines" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 3" DTS:To="Package\SQL Merge FactGLJournalLine" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 4]" DTS:CreationName="" DTS:DTSID="{D831BC0C-1AF7-55D8-993C-263237260C2D}" DTS:From="Package\SQL Merge FactGLJournalLine" DTS:LogicalAnd="False" DTS:ObjectName="Constraint 4" DTS:To="Package\SQL Update Watermark" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 5]" DTS:CreationName="" DTS:DTSID="{9A4A5101-CC3A-5D9D-AF63-162EED1574BD}" DTS:EvalOp="3" DTS:Expression="@[User::RowsExtracted] == 0" DTS:From="Package\DFT Extract Journal Lines" DTS:LogicalAnd="False" DTS:ObjectName="Constraint 5" DTS:To="Package\SQL Update Watermark" />
+    <DTS:PrecedenceConstraint DTS:refId="Package.PrecedenceConstraints[Constraint 6]" DTS:CreationName="" DTS:DTSID="{47083427-9865-5988-BCD0-D3C3D062542B}" DTS:From="Package\SQL Update Watermark" DTS:LogicalAnd="True" DTS:ObjectName="Constraint 6" DTS:To="Package\SQL Complete Batch" />
+  </DTS:PrecedenceConstraints>
+</DTS:Executable>
