@@ -1093,16 +1093,33 @@ class SSISParser:
         if pc_container is None:
             return constraints
 
+        # SSIS 2012+ stores From/To as refIds ("Package\Task"), older formats as DTSIDs.
+        id_by_ref: dict[str, str] = {}
+        executables = parent.find(_dts("Executables"))
+        if executables is not None:
+            for child in executables.findall(_dts("Executable")):
+                child_id = _clean_id(_attr(child, "DTSID"))
+                for key in (_attr(child, "refId"), _attr(child, "ObjectName")):
+                    if key:
+                        id_by_ref[key] = child_id
+
+        def resolve(raw: str | None) -> str:
+            if raw and raw in id_by_ref:
+                return id_by_ref[raw]
+            return _clean_id(raw)
+
         for pc in pc_container.findall(_dts("PrecedenceConstraint")):
             pc_id = _clean_id(_attr(pc, "DTSID"))
-            from_id = _clean_id(_attr(pc, "From"))
-            to_id = _clean_id(_attr(pc, "To"))
-            eval_op_str = _attr(pc, "EvalOp") or "1"
+            from_id = resolve(_attr(pc, "From"))
+            to_id = resolve(_attr(pc, "To"))
+            # DTSPrecedenceEvalOp: 1=Expression, 2=Constraint (default),
+            # 3=ExpressionAndConstraint, 4=ExpressionOrConstraint
+            eval_op_str = _attr(pc, "EvalOp") or "2"
             eval_op_map = {
-                "1": PrecedenceEvalOp.CONSTRAINT,
-                "2": PrecedenceEvalOp.EXPRESSION,
+                "1": PrecedenceEvalOp.EXPRESSION,
+                "2": PrecedenceEvalOp.CONSTRAINT,
                 "3": PrecedenceEvalOp.EXPRESSION_AND_CONSTRAINT,
-                "5": PrecedenceEvalOp.EXPRESSION_OR_CONSTRAINT,
+                "4": PrecedenceEvalOp.EXPRESSION_OR_CONSTRAINT,
             }
             eval_op = eval_op_map.get(eval_op_str, PrecedenceEvalOp.CONSTRAINT)
             value_str = _attr(pc, "Value") or "0"
@@ -1113,7 +1130,8 @@ class SSISParser:
             }
             value = value_map.get(value_str, PrecedenceValue.SUCCESS)
             expression = _attr(pc, "Expression")
-            logical_and = (_attr(pc, "LogicalAnd") or "-1") != "0"
+            # Written as "True"/"False" by 2012+, or -1/0 by older versions; default is AND.
+            logical_and = (_attr(pc, "LogicalAnd") or "True").strip().lower() not in ("false", "0")
 
             constraints.append(PrecedenceConstraint(
                 id=pc_id,
