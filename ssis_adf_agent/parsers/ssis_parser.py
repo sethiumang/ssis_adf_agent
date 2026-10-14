@@ -594,7 +594,9 @@ class SSISParser:
         params: list[SSISParameter] = []
         # Support both modern (PackageParameters/PackageParameter) and
         # legacy (Parameters/Parameter) formats
-        params_container = root.find(_dts("PackageParameters")) or root.find(_dts("Parameters"))
+        params_container = root.find(_dts("PackageParameters"))
+        if params_container is None:
+            params_container = root.find(_dts("Parameters"))
         if params_container is None:
             return params
 

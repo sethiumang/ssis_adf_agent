@@ -1,34 +1,26 @@
 ---
 mode: agent
-tools:
-  - scan_ssis_packages
-  - analyze_ssis_package
-description: Scan a source for SSIS packages, then analyze each one for complexity and conversion gaps.
+description: Kick off deterministic inventory, analysis, conversion, and AI triage for SSIS packages.
 ---
 
 # Analyze SSIS Packages
 
-Scan the source below for SSIS packages, then produce a full analysis report for each package found.
+Start the migration workflow. The deterministic engine must handle known patterns without
+spending AI reasoning. Use AI only for the generated review queue.
 
-## Step 1 — Discover packages
+## Inputs
 
-Use `scan_ssis_packages` with:
-- `source_type`: ${input:source_type:local, git, or sql}
-- `path_or_connection`: ${input:path_or_connection:Local directory path, git repo URL, or SQL Server connection string}
+- **Source folder**: ${input:source:Local directory containing .dtsx packages}
+- **Workspace**: ${input:workspace:Migration workspace, e.g. work/customer-name}
 
-## Step 2 — Analyze each package
+## Steps
 
-For every package found, call `analyze_ssis_package` with its path.
-
-## Step 3 — Report
-
-Produce a Markdown table summarizing:
-- Package name
-- Complexity score and label
-- Number of gaps (manual_required / warning / info)
-- Estimated effort
-- Key issues (first 3 gaps from the `manual_required` category)
-
-Then list full gap details for each "Very High" or "High" complexity package.
-
-Conclude with a prioritized recommendation of which packages to convert first (start with lowest complexity).
+1. Run `ssis-adf migrate --source "<source>" --workspace "<workspace>"`.
+2. Read `<workspace>/migration_report.md`.
+3. Read `<workspace>/02_assessment/ai_review_queue.json`.
+4. Summarize the migration waves and open findings, grouped as:
+   - deterministic conversion complete,
+   - review required,
+   - AI refactor required,
+   - architecture decision required.
+5. Do not refactor anything until the user selects or approves a review item.

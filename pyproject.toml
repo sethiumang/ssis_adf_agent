@@ -5,11 +5,10 @@ build-backend = "hatchling.build"
 [project]
 name = "ssis-adf-agent"
 version = "0.1.0"
-description = "MCP server for reading SSIS packages and converting them to ADF pipelines, surfaced as GitHub Copilot tools"
+description = "Deterministic-first SSIS to ADF migration CLI with AI-assisted review"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "mcp>=1.0.0,<2",  # 2.x removed the low-level Server decorators used by mcp_server.py
     "lxml>=5.0.0",
     "pydantic>=2.0.0",
     "azure-mgmt-datafactory>=4.0.0",
@@ -33,9 +32,13 @@ dev = [
 llm = [
     "openai>=1.30.0",
 ]
+mcp = [
+    "mcp>=1.0.0,<2",  # Optional Copilot/MCP adapter; the CLI is the primary interface.
+]
 
 [project.scripts]
-ssis-adf-agent = "ssis_adf_agent.mcp_server:main"
+ssis-adf = "ssis_adf_agent.cli:main"
+ssis-adf-mcp = "ssis_adf_agent.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["ssis_adf_agent"]

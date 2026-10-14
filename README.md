@@ -1,11 +1,14 @@
-# SSIS → ADF Agent
+# SSIS → ADF Migration Accelerator
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-An MCP (Model Context Protocol) server that reads SSIS packages (`.dtsx`) and converts them to Azure Data Factory (ADF) JSON artifacts, exposed as tools directly inside **GitHub Copilot**.
+A deterministic-first migration workflow that reads SSIS packages (`.dtsx`), converts known
+patterns into Azure Data Factory artifacts without AI, and creates a focused review queue for
+**GitHub Copilot** to investigate uncertain business logic.
 
-All generated artifacts follow **Microsoft Recommended patterns** from [learn.microsoft.com](https://learn.microsoft.com/en-us/azure/data-factory/).
+The Python CLI is the primary product interface. MCP is optional. Correctness is established by
+validation, testing, and SSIS-to-ADF reconciliation—not by AI confidence.
 
 > **Product direction:** See the [AI-powered SSIS migration platform plan](docs/AI_MIGRATION_PLATFORM_PLAN.md)
 > for the proposed customer experience, architecture, trust model, reconciliation approach,
@@ -16,20 +19,26 @@ All generated artifacts follow **Microsoft Recommended patterns** from [learn.mi
 
 ## Start here (customers)
 
-1. **Read the flow.** [docs/CUSTOMER_FLOW.md](docs/CUSTOMER_FLOW.md) covers how you work with the agent, the six phases (discover → assess → convert and refactor → test → reconcile → deploy), the evidence gates, and what is automated today versus done by you.
+1. **Read the flow.** [docs/CUSTOMER_FLOW.md](docs/CUSTOMER_FLOW.md) explains deterministic conversion, targeted AI review, testing, reconciliation, and evidence gates.
 2. **Install** (Python 3.11+):
    ```powershell
    git clone <this-repo-url> ssis_adf_agent; cd ssis_adf_agent
    python -m venv .venv; .venv\Scripts\activate      # macOS/Linux: source .venv/bin/activate
    pip install -e .
-   python scripts/verify_install.py                  # starts the MCP server and analyzes a sample package
+   python scripts/verify_install.py                  # analyzes, converts, and validates a sample
    ```
-3. **Open the folder in VS Code**, start Copilot Chat in **Agent** mode, and try it on the sample corpus:
-   `Analyze every package under samples/fsi/ssis and rank them by migration risk.`
-4. **Point it at your packages.** Keep your work in `work/<migration-name>/` (git-ignored), and follow the prompts `/analyze_packages` → `/convert_package` → `/refactor_gaps` → `/deploy_adf` → `/reconcile_package`.
+3. **Kick off a deterministic migration** on the sample corpus:
+   ```powershell
+   ssis-adf migrate --source samples\fsi\ssis\ContosoBank.EOD --workspace work\demo
+   ```
+4. **Open the folder in VS Code** and ask Copilot Agent mode to review
+   `work/demo/migration_report.md` and the open items in
+   `work/demo/02_assessment/ai_review_queue.json`.
+5. **Point the same command at your packages.** Copilot works only on uncertain findings, then
+   validation, testing, and reconciliation determine whether the result is trustworthy.
 
 > ⚠️ **Review generated pipelines before running them.** Known engine limitations include missing
-> activity ordering (`dependsOn`) and missing data flows inside containers. See
+> data flows inside some containers and incomplete generated dependencies. See
 > [Known limitations](docs/CUSTOMER_FLOW.md#known-limitations-read-before-using-output).
 > This is an accelerator provided as-is under the MIT license. You are responsible for reviewing,
 > testing and reconciling everything it generates.
@@ -44,10 +53,11 @@ SQL Agent jobs ───┤      │   Optional configs:    │
                          └──────────┬─────────────┘
                                     ▼
                     ┌─────────────────────────────┐
-                    │      ssis-adf-agent         │  ← MCP stdio server
+                    │          ssis-adf           │  ← Python CLI
                     │                             │
-                    │  scan → analyze → convert   │
-                    │      → validate → deploy    │
+                    │  inventory → analyze        │
+                    │  deterministic conversion   │
+                    │  → AI review queue          │
                     │                             │
                     │  Detects:                   │
                     │  • Cross-DB / linked server  │
@@ -71,9 +81,9 @@ SQL Agent jobs ───┤      │   Optional configs:    │
 - [Customer flow and readiness gates](docs/CUSTOMER_FLOW.md)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
-- [Registering as an MCP Server in VS Code](#registering-as-an-mcp-server-in-vs-code)
+- [Optional MCP adapter](#optional-registering-the-mcp-adapter-in-vs-code)
 - [Trying It Out — Samples Directory](#trying-it-out--samples-directory)
-- [Usage — End-to-End Walkthrough](#usage--end-to-end-walkthrough)
+- [CLI-first workflow](#cli-first-workflow)
   - [1. Scan for packages](#1-scan-for-packages)
   - [2. Analyze a package](#2-analyze-a-package)
   - [3. Convert a package](#3-convert-a-package)
@@ -108,7 +118,7 @@ SQL Agent jobs ───┤      │   Optional configs:    │
 | **ODBC Driver for SQL Server** | 17 or later — required only when scanning packages from SQL Server (`msdb`) |
 | **Azure CLI** | [`az`](https://learn.microsoft.com/cli/azure/install-azure-cli) — required for `az login` when deploying from a developer machine |
 | **VS Code** | Latest stable |
-| **GitHub Copilot extension** | With agent / MCP support enabled |
+| **GitHub Copilot extension** | Agent mode; MCP support is optional |
 
 ---
 
@@ -134,19 +144,24 @@ To enable **automatic C# → Python translation** of Script Tasks via Azure Open
 pip install -e ".[llm]"
 ```
 
-Verify the installation. This starts the MCP server over stdio, lists its tools and analyzes a sample package:
+Verify the installation. This analyzes, converts, and validates a sample package without AI or MCP:
 
 ```bash
 python scripts/verify_install.py
 ```
 
-> `ssis-adf-agent` (the console script) *is* the stdio MCP server. Run on its own, it waits silently for an MCP client; that is expected.
-
 > **Note:** When the package is published to PyPI, you can install it with `pip install ssis-adf-agent` without cloning the repository.
 
 ---
 
-## Registering as an MCP Server in VS Code
+## Optional: registering the MCP adapter in VS Code
+
+The customer workflow does not require MCP. Install the optional adapter only when an
+MCP-compatible client is desired:
+
+```bash
+pip install -e ".[mcp]"
+```
 
 Add the server to your VS Code `settings.json` so GitHub Copilot can discover it as a set of agent tools.
 
@@ -158,14 +173,14 @@ Add the server to your VS Code `settings.json` so GitHub Copilot can discover it
   "github.copilot.chat.experimental.mcpServers": {
     "ssis-adf-agent": {
       "type": "stdio",
-      "command": "ssis-adf-agent",
+      "command": "ssis-adf-mcp",
       "args": []
     }
   }
 }
 ```
 
-> If you installed into a virtual environment, replace `"command": "ssis-adf-agent"` with the full path to the script, e.g. `"C:\\path\\to\\.venv\\Scripts\\ssis-adf-agent.exe"` (Windows) or `"/path/to/.venv/bin/ssis-adf-agent"` (macOS/Linux).
+> If you installed into a virtual environment, replace `"command": "ssis-adf-mcp"` with its full path.
 
 3. Restart VS Code (or reload the window: `Ctrl+Shift+P` → **Developer: Reload Window**).
 4. Open **Copilot Chat**, switch to **Agent** mode, and verify that the five tools appear:
@@ -199,9 +214,42 @@ For your own packages, use a `work/` folder in the repo root (or a separate repo
 
 ---
 
-## Usage — End-to-End Walkthrough
+## CLI-first workflow
 
-All five tools are invoked from **GitHub Copilot Chat in Agent mode**. Type your request in natural language and Copilot will call the appropriate tool(s). The sections below show what each tool does and the key parameters it accepts.
+Start the complete deterministic phase:
+
+```powershell
+ssis-adf migrate --source D:\SSIS --workspace work\customer-migration
+```
+
+This creates:
+
+- `migration_report.md` — customer-facing package summary
+- `migration.json` — workflow state and evidence gates
+- `01_inventory/packages.json` — discovered packages
+- `02_assessment/*.analysis.json` — deterministic analysis
+- `02_assessment/ai_review_queue.json` — only the uncertain work Copilot should investigate
+- `03_adf/<package>/` — generated ADF artifacts
+- `04_review/semantic_review.md` — final review template
+- `05_reconciliation/results.json` — reconciliation state
+
+Common commands:
+
+```powershell
+ssis-adf status --workspace work\customer-migration
+ssis-adf review --workspace work\customer-migration
+ssis-adf gate --workspace work\customer-migration --package FinanceDailyLoad --gate G1 --result pass --evidence assessment.md --approved-by "Migration Owner"
+ssis-adf validate --workspace work\customer-migration --package FinanceDailyLoad
+ssis-adf reconcile --workspace work\customer-migration --package FinanceDailyLoad --result fail --evidence recon.md --notes "Two keys differ"
+```
+
+A failed reconciliation creates a new `RECON-*` item in the AI review queue and sends the
+package back through refactoring, validation, testing, and reconciliation.
+
+## Optional MCP tool API
+
+The original five MCP tools remain available as an optional compatibility adapter. The CLI
+workflow above is the source of truth for customer migrations and gates.
 
 ---
 

@@ -1,9 +1,6 @@
 ---
 mode: agent
-tools:
-  - validate_adf_artifacts
-  - deploy_to_adf
-description: Validate ADF artifacts and deploy them to Azure Data Factory.
+description: Enforce the build gate and deploy an approved package to Azure Data Factory.
 ---
 
 # Deploy ADF Artifacts
@@ -12,7 +9,8 @@ Validate and deploy generated ADF JSON artifacts to an Azure Data Factory instan
 
 ## Parameters
 
-- **Artifacts directory**: ${input:artifacts_dir:Directory containing generated ADF JSON artifacts}
+- **Workspace**: ${input:workspace:Migration workspace, e.g. work/<migration>}
+- **Package key**: ${input:package_key:Package key from migration.json}
 - **Subscription ID**: ${input:subscription_id:Azure subscription GUID}
 - **Resource group**: ${input:resource_group:Azure resource group name}
 - **Factory name**: ${input:factory_name:Azure Data Factory name}
@@ -22,20 +20,22 @@ Validate and deploy generated ADF JSON artifacts to an Azure Data Factory instan
 
 ### 1 — Validate artifacts
 
-Call `validate_adf_artifacts` with `artifacts_dir`.
+Run `ssis-adf validate --workspace "<workspace>" --package "<package_key>"`.
 
-If any structural issues are found, **stop and report them**. Ask the user to fix the issues
-in the generated JSON before deploying.
+If G2 is blocked by validation or open review items, stop and report them. The CLI also
+enforces this gate and will refuse deployment.
 
 ### 2 — Dry run (if requested)
 
-If `dry_run` = true, call `deploy_to_adf` with `dry_run: true`.
+If `dry_run` = true, run `ssis-adf deploy` with `--dry-run`.
 Report what would be deployed (type, name, count).
 **Do not proceed to actual deployment.**
 
 ### 3 — Deploy
 
-Call `deploy_to_adf` with the parameters above and `dry_run: false`.
+Run:
+
+`ssis-adf deploy --workspace "<workspace>" --package "<package_key>" --subscription-id "<subscription_id>" --resource-group "<resource_group>" --factory-name "<factory_name>"`
 
 Deployment order enforced by the tool: linked services → datasets → data flows → pipelines → triggers.
 

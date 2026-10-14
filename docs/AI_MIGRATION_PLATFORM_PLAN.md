@@ -116,8 +116,9 @@ Each migration project produces:
 
 ```text
 Interfaces
-  +-- AI agent through MCP
-  +-- CLI
+  +-- CLI (primary workflow and source of truth)
+  +-- AI coding agent using CLI and workspace artifacts
+  +-- Optional MCP adapter
   +-- REST API
   +-- Web portal
   +-- CI/CD integration
@@ -149,21 +150,22 @@ Persistent project store and artifact store
   +-- Run history and reconciliation evidence
 ```
 
-### Agent
+### AI coding agent
 
-The agent is the primary guided experience. It:
+The agent is the primary guided experience, while the CLI owns workflow state and gates. It:
 
 - Interprets the customer's goal
 - Creates and resumes migration projects
 - Collects missing configuration
 - Explains packages and findings
 - Proposes architecture and remediation options
-- Invokes deterministic workflow operations
+- Invokes deterministic CLI operations
 - Diagnoses conversion and reconciliation failures
 - Presents decisions for human approval
 
-The agent does not contain the conversion rules. MCP tools expose workflow
-capabilities to the agent.
+The agent does not contain the conversion rules and does not recreate obvious mappings.
+It reads the explicit AI review queue produced by the CLI. MCP can expose the same workflow
+capabilities later, but it is not required for the customer experience.
 
 ### Deterministic engine
 
@@ -401,40 +403,27 @@ runtime. Secret values must not be persisted in the manifest or reports.
 
 ## Interfaces
 
-### Agent and MCP
+### CLI and AI agent
 
-The agent should use project-level tools rather than requiring customers to
-manually chain low-level tools:
-
-```text
-create_migration_project
-run_inventory
-create_conversion_plan
-record_migration_decision
-convert_approved_packages
-validate_migration_release
-deploy_staging_release
-run_reconciliation
-publish_readiness_report
-deploy_approved_release
-```
-
-Existing package-level tools can remain available for engineering and debugging.
-
-### CLI
-
-The CLI provides repeatability for engineers and automation:
+The customer or agent starts one project-level workflow rather than manually chaining
+package-level operations:
 
 ```powershell
-ssis-migrate project create migration.yaml
-ssis-migrate inventory migration.yaml
-ssis-migrate assess migration.yaml
-ssis-migrate convert migration.yaml
-ssis-migrate validate migration.yaml
-ssis-migrate deploy --environment staging migration.yaml
-ssis-migrate reconcile migration.yaml
-ssis-migrate report migration.yaml
+ssis-adf migrate --source D:\SSIS --workspace work\customer
+ssis-adf review --workspace work\customer
+ssis-adf validate --workspace work\customer --package PackageName
+ssis-adf reconcile --workspace work\customer --package PackageName --result pass --evidence signoff.md
 ```
+
+The workflow writes `migration.json`, `migration_report.md`, and
+`02_assessment/ai_review_queue.json`. These files—not the chat history—are the source of truth.
+A reconciliation failure creates a new `RECON-*` queue item and sends the package back through
+AI diagnosis, refactoring, validation, testing, and reconciliation.
+
+### Optional MCP adapter
+
+MCP may expose the same application services to compatible clients after the CLI workflow is
+stable. It must remain a thin adapter and must not contain separate conversion or gate logic.
 
 ### API and portal
 

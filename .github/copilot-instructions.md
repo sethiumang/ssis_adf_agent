@@ -2,26 +2,39 @@
 applyTo: "**"
 ---
 
-# SSIS → ADF Conversion Agent — Copilot Domain Knowledge
+# SSIS → ADF Migration Workflow — Copilot Domain Knowledge
 
 ## Project Overview
-This project exposes an MCP server (`ssis-adf-agent`) that reads SSIS packages (.dtsx)
-and converts them to Azure Data Factory (ADF) JSON artifacts.  Five tools are available
-via the MCP server; use them in the order that makes sense for the task.
+This project is a CLI-first, AI-orchestrated SSIS migration workflow. The deterministic
+Python engine handles inventory, analysis, known SSIS-to-ADF mappings, artifact generation,
+validation, and workflow gates without using AI tokens. Copilot handles only uncertain
+logic, semantic review, and reconciliation mismatches.
 
----
+Start a migration with:
 
-## MCP Tools Available
+```powershell
+ssis-adf migrate --source <ssis-folder> --workspace work/<migration-name>
+```
 
-| Tool | Purpose |
-|---|---|
-| `scan_ssis_packages` | Discover .dtsx files from local path, Git repo, or SQL Server |
-| `analyze_ssis_package` | Complexity score, gap analysis, and dependency order for one package |
-| `convert_ssis_package` | Full conversion to ADF JSON (pipeline, linked services, datasets, data flows, triggers) |
-| `validate_adf_artifacts` | Structural validation of generated JSON before deploying |
-| `deploy_to_adf` | Push artifacts to Azure Data Factory via SDK |
+Then read:
 
----
+- `migration_report.md` for the customer summary.
+- `02_assessment/ai_review_queue.json` for work that actually needs AI.
+- The original `.dtsx` and generated `03_adf/<package>/` artifacts when investigating a finding.
+
+## Copilot operating rules
+
+1. Do not re-convert obvious mappings or spend model reasoning on items absent from the review queue.
+2. Work through open review items one at a time and preserve the original SSIS behavior.
+3. Explain semantic differences involving nulls, ordering, precision, joins, error paths, or dropped rows.
+4. Record an approved decision with `ssis-adf review`; never silently mark an item resolved.
+5. Run `ssis-adf validate` after edits. G2 cannot pass while review items or validation errors remain.
+6. Treat final semantic review as risk analysis, not proof of equivalence.
+7. Reconciliation is proof. Record its evidence with `ssis-adf reconcile`.
+8. When reconciliation fails, diagnose the new `RECON-*` queue item, refactor, validate, test, and reconcile again.
+
+MCP remains an optional adapter for compatible clients. Install `.[mcp]` and run
+`ssis-adf-mcp` only when explicitly desired; do not require MCP for the customer workflow.
 
 ## SSIS Component Mapping
 

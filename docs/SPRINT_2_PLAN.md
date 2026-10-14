@@ -8,9 +8,9 @@
 
 Fix the gaps found by `samples/fsi/tools/validate_corpus.py` (see `samples/fsi/README.md`, findings P1–P12).
 
-- [ ] A1 (P1) Resolve precedence-constraint `From`/`To` refIds to tasks, so `dependsOn` is generated
-- [ ] A2 (P2) Detect `LogicalAnd="False"` (OR)
-- [ ] A3 (P3) Correct the `EvalOp` mapping (1 = Expression, 2 = Constraint, 3 = both, 4 = either)
+- [x] A1 (P1) Resolve precedence-constraint `From`/`To` refIds to tasks, so `dependsOn` is generated
+- [x] A2 (P2) Detect `LogicalAnd="False"` (OR)
+- [x] A3 (P3) Correct the `EvalOp` mapping (1 = Expression, 2 = Constraint, 3 = both, 4 = either)
 - [ ] A4 (P5) Generate data flows for Data Flow tasks nested in containers
 - [ ] A5 (P6) Generate `LS_AzureFunction` when any activity references it
 - [ ] A6 (P7) `validate_artifacts` reports dangling data flow, dataset and linked service references

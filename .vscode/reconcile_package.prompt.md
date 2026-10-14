@@ -1,7 +1,5 @@
 ---
 mode: agent
-tools:
-  - analyze_ssis_package
 description: Generate reconciliation queries and a sign-off template that prove an ADF pipeline produces the same data as its SSIS package (Phase 5 – reconcile).
 ---
 
@@ -10,6 +8,8 @@ description: Generate reconciliation queries and a sign-off template that prove 
 ## Inputs
 
 - **Package path**: ${input:package_path:Absolute path to the original .dtsx file}
+- **Workspace**: ${input:workspace:Migration workspace, e.g. work/<migration>}
+- **Package key**: ${input:package_key:Package key from migration.json}
 - **Output folder**: ${input:recon_dir:Folder for reconciliation assets, e.g. work/<migration>/05_recon/<Package>}
 - **How the two outputs are separated**: ${input:separation:e.g. SSIS writes to FinanceDW, ADF writes to FinanceDW_ADF; or schema ssis vs adf}
 
@@ -41,5 +41,8 @@ description: Generate reconciliation queries and a sign-off template that prove 
    - the semantic risks from step 2 and how each was verified,
    - data owner name, date and decision.
 5. Tell the user to run both systems on the **same input** for the same business date, paste the results into `signoff.md`, and ask the data owner to sign off (gate G4).
+6. Record the result:
+   - Match: `ssis-adf reconcile --workspace "<workspace>" --package "<package_key>" --result pass --evidence "<signoff.md>"`
+   - Mismatch: use `--result fail --notes "<summary>"`. This creates a `RECON-*` item in the AI review queue. Diagnose and refactor that item, then repeat validation, testing, and reconciliation.
 
 Do not claim the package is reconciled. Only the results the user pastes in, and the data owner's sign-off, establish that.

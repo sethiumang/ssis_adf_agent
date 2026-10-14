@@ -1,6 +1,6 @@
 # Setup Guide
 
-Step-by-step instructions for getting `ssis-adf-agent` running on a new machine.
+Step-by-step instructions for running the CLI-first migration workflow.
 
 ---
 
@@ -12,7 +12,7 @@ Step-by-step instructions for getting `ssis-adf-agent` running on a new machine.
 | **pip** | Latest | `pip --version` | Included with Python |
 | **Git** | Any | `git --version` | [git-scm.com](https://git-scm.com/) |
 | **VS Code** | Latest stable | `code --version` | [code.visualstudio.com](https://code.visualstudio.com/) |
-| **GitHub Copilot extension** | With MCP/Agent support | Extensions sidebar → search "GitHub Copilot" | VS Code Marketplace |
+| **GitHub Copilot extension** | Agent support | Extensions sidebar → search "GitHub Copilot" | VS Code Marketplace |
 
 ### Optional (depending on features used)
 
@@ -55,8 +55,11 @@ pip install -e ".[dev]"
 # With LLM Script Task translation (Azure OpenAI)
 pip install -e ".[llm]"
 
+# With the optional MCP compatibility adapter
+pip install -e ".[mcp]"
+
 # Everything
-pip install -e ".[dev,llm]"
+pip install -e ".[dev,llm,mcp]"
 ```
 
 ### Verify
@@ -65,44 +68,51 @@ pip install -e ".[dev,llm]"
 python scripts/verify_install.py
 ```
 
-This starts the MCP server the same way VS Code does, checks that all five tools are registered, and analyzes a sample package. `ssis-adf-agent` itself is the stdio server: if you run it directly, it waits silently for a client.
-
-> **VS Code and virtual environments:** `.vscode/mcp.json` launches `python -m ssis_adf_agent.mcp_server`. Either start VS Code from a terminal where the venv is active (`code .`), or select the venv interpreter. If neither works, change `"command"` in `.vscode/mcp.json` to the venv's Python (`.venv\\Scripts\\python.exe` or `.venv/bin/python`).
+This analyzes and converts a sample package through the deterministic engine without MCP or AI.
 
 ---
 
-## 3. Register the MCP Server in VS Code
+## 3. Kick Off a Migration
 
-The workspace already includes `.vscode/mcp.json` which registers the server automatically when you open the workspace. No manual configuration is needed.
+```powershell
+ssis-adf migrate `
+  --source samples\fsi\ssis\ContosoBank.EOD `
+  --workspace work\demo
+```
 
-If you need to register it in your **user** settings instead (e.g. for use across multiple workspaces):
+Open `work/demo/migration_report.md`, then ask Copilot Agent mode to review the open items in
+`work/demo/02_assessment/ai_review_queue.json`. The deterministic engine already handled known
+mappings; Copilot should focus only on uncertain logic and final semantic review.
 
-1. Open **Command Palette** (`Ctrl+Shift+P`) → **Preferences: Open User Settings (JSON)**
-2. Add:
+Useful commands:
+
+```powershell
+ssis-adf status --workspace work\demo
+ssis-adf review --workspace work\demo
+ssis-adf gate --workspace work\demo --package FIN_FX_DailyRates_Load --gate G1 --result pass --evidence work\demo\migration_report.md --approved-by "Migration Owner"
+ssis-adf validate --workspace work\demo --package FIN_FX_DailyRates_Load
+```
+
+## 4. Optional MCP Adapter
+
+MCP is not required. To expose the legacy five tools to an MCP client, install `.[mcp]` and
+register it explicitly:
 
 ```jsonc
 {
   "github.copilot.chat.experimental.mcpServers": {
     "ssis-adf-agent": {
       "type": "stdio",
-      "command": "ssis-adf-agent",
+      "command": "ssis-adf-mcp",
       "args": []
     }
   }
 }
 ```
 
-> **Virtual environment note:** If you installed into a venv, replace `"command": "ssis-adf-agent"` with the full path:
-> - Windows: `"C:\\path\\to\\.venv\\Scripts\\ssis-adf-agent.exe"`
-> - macOS/Linux: `"/path/to/.venv/bin/ssis-adf-agent"`
-
-3. Reload VS Code (`Ctrl+Shift+P` → **Developer: Reload Window**).
-4. Open **Copilot Chat** → switch to **Agent** mode → confirm five tools appear:
-   `scan_ssis_packages`, `analyze_ssis_package`, `convert_ssis_package`, `validate_adf_artifacts`, `deploy_to_adf`
-
 ---
 
-## 4. Environment Variables
+## 5. Environment Variables
 
 ### Required for deployment
 
@@ -137,7 +147,7 @@ export AZURE_OPENAI_DEPLOYMENT="gpt-4o"
 
 ---
 
-## 5. Optional Configuration Files
+## 6. Optional Configuration Files
 
 These JSON config files enable enterprise features. Pass their paths as parameters to `analyze_ssis_package` or `convert_ssis_package`.
 
@@ -175,34 +185,20 @@ C:\adf_output\shared
 
 ---
 
-## 6. Quick Smoke Test
+## 7. Quick Smoke Test
 
 Use the synthetic FSI corpus, so you don't need any customer data:
 
-1. Open Copilot Chat in Agent mode.
-2. Run:
-
-```
-Scan for SSIS packages at samples/fsi/ssis and list what you find.
-```
-
-3. Then:
-
-```
-Analyze samples/fsi/ssis/ContosoBank.EOD/FIN_FX_DailyRates_Load.dtsx.
-```
-
-4. Then:
-
-```
-Convert it to work/demo/03_adf/FIN_FX_DailyRates_Load and validate the artifacts.
-```
+1. Run the `ssis-adf migrate` command from section 3.
+2. Read `work/demo/migration_report.md`.
+3. Run `ssis-adf review --workspace work/demo`.
+4. Run `ssis-adf validate --workspace work/demo --package FIN_FX_DailyRates_Load`.
 
 Next: follow [docs/CUSTOMER_FLOW.md](docs/CUSTOMER_FLOW.md) for the full analyze → refactor → test → reconcile → deploy flow on your own packages.
 
 ---
 
-## 7. Development Workflow
+## 8. Development Workflow
 
 ```bash
 # Run tests
@@ -226,11 +222,11 @@ The project enforces `ruff` with `line-length = 100` and `mypy --strict`.
 
 | Problem | Solution |
 |---|---|
-| `ssis-adf-agent` command not found | Ensure the venv is activated, or use the full path to the script |
-| `AttributeError: 'Server' object has no attribute 'list_tools'` | `mcp` 2.x is installed. Run `pip install -e .` again; the project pins `mcp<2` |
-| Tools don't appear in Copilot Chat | Reload VS Code; confirm `.vscode/mcp.json` exists and Agent mode is selected |
+| `ssis-adf` command not found | Ensure the venv is activated and rerun `pip install -e .` |
+| Optional MCP adapter fails to import | Install `pip install -e \".[mcp]\"`; the adapter pins `mcp<2` |
+| Optional MCP tools don't appear | Reload VS Code, confirm `.[mcp]` is installed, and check your user-level MCP registration |
 | ODBC errors when scanning SQL Server | Install [ODBC Driver 17+](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server) and verify with `odbcinst -j` (Linux) or ODBC Data Source Administrator (Windows) |
 | `EncryptAllWithPassword` warnings | The SSIS package has encrypted connection strings. Passwords must be filled in manually in linked service JSON or referenced via Key Vault (`use_key_vault=true`) |
 | LLM translation returns TODO stubs | Verify `AZURE_OPENAI_ENDPOINT` and `AZURE_OPENAI_API_KEY` are set. Check that the deployment name matches your Azure OpenAI resource. |
-| `az login` required for deployment | Run `az login` before calling `deploy_to_adf`. For CI/CD, set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`. |
+| `az login` required for deployment | Run `az login` before `ssis-adf deploy`. For CI/CD, set `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`. |
 | Cross-DB references flagged as `manual_required` | Four-part names and `OPENQUERY`/`OPENROWSET` calls require architectural decisions — replace with elastic queries, external tables, or separate linked services. |

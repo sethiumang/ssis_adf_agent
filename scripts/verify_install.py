@@ -1,42 +1,18 @@
-"""Check that ssis-adf-agent is installed correctly.
+"""Check that the CLI-first SSIS-to-ADF workflow is installed correctly.
 
-Starts the MCP server the same way VS Code does (stdio), lists its tools, and analyzes a
-sample package. Run from the repo root inside your virtual environment:
+Analyzes and converts a sample package without invoking MCP or an AI model. Run from the
+repo root inside your virtual environment:
 
     python scripts/verify_install.py
 """
 from __future__ import annotations
 
-import asyncio
-import json
 import sys
+import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SAMPLE = REPO / "samples" / "fsi" / "ssis" / "ContosoBank.EOD" / "FIN_FX_DailyRates_Load.dtsx"
-EXPECTED_TOOLS = {"scan_ssis_packages", "analyze_ssis_package", "convert_ssis_package",
-                  "validate_adf_artifacts", "deploy_to_adf"}
-
-
-async def _check() -> None:
-    from mcp import ClientSession, StdioServerParameters
-    from mcp.client.stdio import stdio_client
-
-    params = StdioServerParameters(command=sys.executable, args=["-m", "ssis_adf_agent.mcp_server"],
-                                   cwd=str(REPO))
-    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
-        await session.initialize()
-        tools = {t.name for t in (await session.list_tools()).tools}
-        missing = EXPECTED_TOOLS - tools
-        if missing:
-            raise SystemExit(f"FAIL: MCP server is missing tools: {sorted(missing)}")
-        print(f"OK   MCP server started; tools: {', '.join(sorted(tools))}")
-
-        result = await session.call_tool("analyze_ssis_package", {"package_path": str(SAMPLE)})
-        analysis = json.loads(result.content[0].text)
-        c = analysis["complexity"]
-        print(f"OK   analyzed {analysis['package_name']}: {c['total_tasks']} tasks, "
-              f"complexity {c['score']} ({c['effort_estimate']})")
 
 
 def main() -> int:
@@ -48,9 +24,35 @@ def main() -> int:
     except ImportError:
         print("FAIL: ssis_adf_agent is not installed. Activate your venv and run: pip install -e .")
         return 1
-    asyncio.run(_check())
-    print("\nAll checks passed. Open this folder in VS Code, start Copilot Chat in Agent mode,\n"
-          "and follow docs/CUSTOMER_FLOW.md.")
+
+    from ssis_adf_agent.workflow import analyze_package, convert_package, validate_artifacts
+
+    package, analysis, gaps = analyze_package(SAMPLE)
+    complexity = analysis["complexity"]
+    print(
+        f"OK   analyzed {analysis['package_name']}: {complexity['total_tasks']} tasks, "
+        f"complexity {complexity['score']} ({complexity['effort_estimate']}), "
+        f"{len(gaps)} review findings"
+    )
+
+    with tempfile.TemporaryDirectory(prefix="ssis-adf-verify-") as temp_dir:
+        output_dir = Path(temp_dir) / "adf"
+        conversion = convert_package(package, output_dir)
+        issues = validate_artifacts(output_dir)
+        if issues:
+            print(f"FAIL: generated sample artifacts have {len(issues)} validation issue(s)")
+            return 1
+        count = conversion["artifacts_generated"]
+        print(
+            "OK   deterministic conversion generated "
+            f"{count['pipelines']} pipeline, {count['linked_services']} linked services, "
+            f"{count['datasets']} datasets, and {count['data_flows']} data flows"
+        )
+
+    print(
+        "\nAll checks passed. Run `ssis-adf migrate --help`, then follow "
+        "docs/CUSTOMER_FLOW.md."
+    )
     return 0
 
 
